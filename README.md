@@ -1,148 +1,869 @@
-# AegisCloud: Dual-Loop Agentic Meta-RL Cloud Resource Allocation & Auto-Scaling
+# AegisCloud: Agentic AI Cloud Resource Allocator
 
-AegisCloud is a next-generation, production-grade cloud resource orchestrator and scheduler. It is engineered to solve two of the greatest challenges in modern cloud computing: the **Multi-Resource Scheduling Bottleneck** [118, 122] and the **RL Generalizability Crisis** [12, 13, 15] in non-stationary production environments.
+> **An end-to-end AI systems project that replays real cloud workloads, forecasts future resource demand, learns scheduling policies with reinforcement learning, and uses an agentic control layer for unusual operational situations.**
 
-By implementing a **dual-loop architecture**, AegisCloud combines high-speed, microsecond-level Deep Reinforcement Learning (DRL) scheduling (the **Fast-Loop**) [118, 120] with asynchronous, stateful, multi-agent Large Language Model (LLM) governance and telemetry-driven supervision (the **Slow-Loop**) [24, 29].
+## Overview
 
----
+AegisCloud is a cloud resource allocation and scheduling system built around a simple idea:
 
-## 1. The Core Problem: Why Cloud Scheduling is a Nightmare
+> **Use historical workload data to recreate a realistic scheduling environment, predict what demand may come next, and learn better allocation decisions over time.**
 
-Managing modern computer clusters (like Kubernetes or Borg) [25, 75] using hand-crafted heuristics is an increasingly unsustainable task. Static algorithms like Round-Robin, Shortest-Job-First (SJF), or greedy bin-packing fail to scale due to two fundamental systems realities:
+The project uses Google cluster workload traces as the source of historical workload behaviour.
 
-### A. The "Hogs vs. Mice" Traffic Extreme
-Google's production cluster traces reveal that cloud workloads are highly unequal and follow an extremely heavy-tailed **Pareto distribution** [72, 73, 89]. 
-*   **The 1% "Hogs":** The top 1% of massive, resource-heavy software jobs consume over **99%** of the cluster's total compute and memory resources [73, 90].
-*   **The 99% "Mice":** The remaining 99% of workloads consist of tiny, low-latency microservices that are highly sensitive to queuing delays [73, 74].
+Instead of training a model to blindly copy Google's historical scheduling decisions, AegisCloud separates the problem into four layers:
 
-When traditional schedulers blindly allocate resources sequentially, a single "hog" can easily block the queue, causing massive service delays, allocation failures, and SLA violations for hundreds of waiting "mice" [74, 128].
-
-### B. The Performance-Complexity Paradox
-While sophisticated AI models can optimize resource utilization, they suffer from a **performance-complexity paradox** [9]. Highly advanced models often require massive infrastructure overhead and struggle to adapt to new environments [9, 10]. Worse, deep reinforcement learning models suffer from a severe **generalizability crisis** [15, 16]—they are mathematically fragile and their scheduling policies collapse when real-world workload traffic patterns suddenly drift or shift [12, 13].
-
----
-
-## 2. The Fast-Loop: High-Speed Deep RL Scheduler (DeepRM + PPO)
-
-To solve the scheduling bottleneck in microseconds, AegisCloud implements a high-speed **Fast-Loop Controller** inspired by the **DeepRM** framework [120] and trained via **Proximal Policy Optimization (PPO)** [5, 47].
-
-```
-                 AEGISCLOUD FAST-LOOP DECISION CYCLE
-
-    [ Waiting Queue (M Jobs) ]           [ 2D Cluster Resource Grid ]
-               |                                      |
-               v                                      v
-     ============================================================
-     ||              PPO POLICY NEURAL NETWORK                 ||
-     ============================================================
-               |                                      |
-       (Selected Task Index)                    (Void Action)
-               v                                      v
-     [ Allocate Task to Node ]              [ Advance Simulated Time ]
-     - Slices NumPy capacity matrices       - Shifts temporal grid rows up
-     - Instantly returns next state         - Appends clean resource blocks
-     - Simulated time remains frozen        - Exposes new waiting tasks
+```text
+Historical Google Cluster Data
+            │
+            ▼
+   Workload Processing + Replay
+            │
+            ▼
+      Cluster Simulator
+            │
+     ┌──────┴──────┐
+     ▼             ▼
+GRU/LSTM       PPO Scheduler
+Forecasting   Allocation Policy
+     │             │
+     └──────┬──────┘
+            ▼
+      Scheduling Decision
+            │
+            ▼
+   Agentic Control Layer
+   (only for unusual cases)
 ```
 
-### How the Fast-Loop Works:
-*   **2D Resource Commitment Grids:** AegisCloud represents the cluster's nodes and future resource availability as a multi-dimensional spatial grid (like a Tetris board) where one dimension is *time* and the other represents *resource capacity* (CPU and Memory) [122, 123].
-*   **The Time-Freezing Trick:** If an agent tried to schedule multiple containers simultaneously, the action-space would explode combinatorially ($2^M$). AegisCloud solves this by decoupling the agent's decision steps from real-time [123]. The agent can make multiple continuous allocation actions in "frozen time." Only when the agent selects the **"Void Action"** ($\emptyset$) does time tick forward, shifting the resource matrices up by one step and ingesting new workloads [123].
-*   **Intelligent Withholding:** Through self-play and reward reinforcement, the PPO agent automatically learns a highly sophisticated, non-work-conserving behavior [121, 134]: it actively **withholds large "hog" jobs** when the cluster is highly loaded, keeping resource slots open so newly arriving, latency-sensitive "mice" can be executed instantly [134].
-*   **Proactive Auto-Scaling (PASM-CRA):** By continuously calculating resource allocation-to-demand ratios [53], the scheduler pervasively monitors shared up-scaling and down-scaling limits to preemptively resize containers before resource exhaustion or system crashes occur [49, 53].
-
 ---
 
-## 3. The Slow-Loop: Asynchronous Agentic SRE Governor (LangGraph)
+# Why this project?
 
-When workload distributions drift—such as a cluster shifting from low-latency e-commerce traffic to heavy machine learning batch jobs—the Fast-Loop's RL policy begins to degrade [12, 13]. To solve this generalizability crisis, AegisCloud introduces a **Slow-Loop SRE Governor** grounded in the **MOYA** and **SSRN Agentic AI** frameworks [24, 97].
+Cloud schedulers must make decisions continuously:
 
-Operating asynchronously in the background, the Slow-Loop acts as an experienced SRE manager supervising our high-speed "Tetris player" [24]. Built using a stateful **LangGraph** multi-agent network, it isolates complex operational tasks into specialized, highly coordinated AI agents [97, 102, 113]:
+- Which workload should run now?
+- Which workload should wait?
+- How much CPU and memory are currently available?
+- What happens when many workloads arrive together?
+- Should resources be preserved because future demand is expected to increase?
+- What should happen when the workload pattern changes unexpectedly?
 
-```
-               AEGISCLOUD DUAL-LOOP ARCHITECTURE COOPERATING
+Traditional scheduling policies such as FIFO or simple greedy allocation provide useful baselines, but they do not explicitly optimize long-term outcomes from interaction with the environment.
 
-  ========================== SLOW-LOOP (LangGraph) ==========================
-  |                                                                        |
-  |  [ Telemetry Analyst Agent ] ---> Detects non-stationary workload drift  |
-  |             |                                                          |
-  |             v                                                          |
-  |  [ SRE Policy LLM Agent ]   ---> Queries ChromaDB Vector Playbooks     |
-  |             |                                                          |
-  |             v                                                          |
-  |  [ Governance Guardrails ]  ---> Validates system safety invariants      |
-  |             |                                                          |
-  |             v                                                          |
-  |  [ Weight Hot-Swapper ]     ===> Triggers Dynamic RL Model Swap        |
-  |                                                                        |
-  ==================================  ||  ====================================
-                                      || Modifies active model policy weights
-                                      v
-  ========================== FAST-LOOP (Gym + PPO) ==========================
-  |                                                                        |
-  |  [ Custom AegisEnv (NumPy) ] <--- Maps real-time Prometheus Telemetry  |
-  |             |                                                          |
-  |             v                                                          |
-  |  [ Microsecond Scheduler ]   ---> Manually binds pods to K3s worker nodes|
-  |                                                                        |
-  ===========================================================================
+AegisCloud explores whether a combination of:
+
+```text
+Forecasting + Reinforcement Learning + Agentic Orchestration
 ```
 
-### The 3-Agent Collaborative Team:
-1.  **Telemetry Analyst Agent:** Continuously monitors the cluster. It ingests live, high-percentile PromQL telemetry and mathematically detects when the workload's underlying data distribution has drifted away from the active RL training profile [13, 35].
-2.  **SRE Policy Agent (LLM-based):** Rather than making blind parameter guesses, this agent interprets the anomaly and queries a **ChromaDB Vector Database** containing historical Incident Logs, SLA policies, and Kubernetes operations playbooks [38, 109, 117]. It retrieves the exact mitigation strategy and formulates an optimized configuration or reward calibration.
-3.  **Governance Guardrail Agent (Deterministic Python):** Actively protects the production cluster. It runs strict, rule-based validations on the LLM's proposed commands, ensuring that the AI governor never violates hard cluster constraints (such as shrinking critical database replication limits below safety thresholds) [33, 44, 109].
-
-### Dynamic Policy Hot-Swapping:
-Once the mitigation strategy is validated, the Slow-Loop executes a **Dynamic Hot-Swap** [13]. It modifies the active neural network weights or reward functions of the running RL scheduler on-the-fly, adapting the cluster's "brain" to the new workload characteristics with zero scheduling downtime [13, 33].
+can make better resource allocation decisions in a simulated cloud environment.
 
 ---
 
-## 4. The Complete Tech Stack
+# Core Idea
 
-| Technology | Role in AegisCloud | What It Solves |
-| :--- | :--- | :--- |
-| **Python & NumPy** | Code-level "clay" used to build the custom simulated environment (`AegisEnv.py`). | Simulates multi-resource temporal allocation grids using microsecond matrix indexing [122, 123]. |
-| **Stable-Baselines3 (SB3)** | High-level library used to load and train PyTorch-based PPO models. | Provides production-ready, stabilized policy gradient algorithms without custom framework code [5]. |
-| **Docker & K3s** | Lightweight containerization and local multi-node Kubernetes cluster. | Hosts your real-world software components, microservices, and custom scheduler pods locally. |
-| **Kubernetes Python API** | Official programmatic client library. | Bypasses the native `kube-scheduler` to execute direct manual Pod-to-Node bindings using Python [25]. |
-| **Prometheus & PromQL** | Telemetry ingestion database and query engine. | Serves as the scheduler's "eyes and ears," scraping and presenting cluster metric vectors [33, 34]. |
-| **LangGraph** | Multi-agent stateful orchestration library. | Structures the Slow-Loop agent interactions, task delegation, and decision flows without context overload [97, 102]. |
-| **ChromaDB / FAISS** | Embedding model and vector database. | Acts as the system's "Procedural Memory," enabling the LLM to instantly search SRE playbooks via RAG [38, 117]. |
+The system has three different "brains", each with a different responsibility.
 
----
+## 1. Forecasting Model — "What may happen next?"
 
-## 5. The System in Action: An End-to-End Walkthrough
+A GRU or LSTM learns workload patterns from historical data.
 
-To see how the dual-loop architecture operates in a live deployment, let's track the journey of a containerized application:
+Example:
 
-1.  **Deployment:** A user deploys a microservice container into the K3s cluster. The container's manifest is labeled with `schedulerName: aegis-scheduler`.
-2.  **Interception:** The default Kubernetes scheduler ignores this container. Our background Python daemon (`aegis_scheduler.py`) intercepts it in a `Pending` state, reading its CPU and memory limits.
-3.  **Microsecond Scheduling:** The custom scheduler queries live node capacities from Prometheus. It shapes this data into a spatial NumPy matrix and feeds it to our trained **PPO Policy Network**. In less than 15 milliseconds, the model calculates the mathematically optimal node assignment and binds the pod to Node 2 via a Kubernetes API call.
-4.  **Workload Drift Event:** Suddenly, an automated testing suite fires up, flooding the cluster with massive, resource-heavy batch data processing jobs (extreme "hogs") [73, 90]. Queue waiting times spike, and the RL scheduler's performance begins to degrade as its stationary policy struggles with the new traffic profile [12, 13].
-5.  **Telemetry Detection:** The **Telemetry Analyst Agent** notices the metric anomaly and flags a statistical workload drift [13].
-6.  **SRE Brainstorming:** The **SRE Policy Agent** reads the alarm, queries our vector database, and retrieves the playbook for handling massive batch runs [38]. It recommends swapping our active PPO weights to a model policy specifically trained on batch-intensive workloads.
-7.  **Guardrail Validation:** The **Governance Guardrail Agent** verifies the proposed model swap against cluster safety invariants to confirm it won't impact high-priority system daemons.
-8.  **Weight Hot-Swap:** With the change approved, the LangGraph engine issues a command that instantly hot-swaps the neural network weights of our running scheduler. The custom scheduler adapts immediately, prioritizing low-latency "mice" microservices while systematically routing the heavy batch "hogs" without dropping a single container.
+```text
+Past workload:
 
----
+CPU demand:
+30 → 35 → 40 → 55
 
-<!-- ## 6. Project Directory Structure
+Memory demand:
+40 → 42 → 45 → 60
 
+Job arrivals:
+5 → 7 → 10 → 16
 ```
+
+The model predicts something like:
+
+```text
+Next interval:
+
+Predicted CPU demand = high
+Predicted memory demand = increasing
+Predicted workload arrivals = increasing
+```
+
+The forecasting model does **not** schedule workloads.
+
+Its only responsibility is:
+
+> **Estimate future workload/resource demand.**
+
+---
+
+## 2. PPO Scheduler — "What should I do now?"
+
+The PPO reinforcement-learning agent receives the current cluster state.
+
+Example state:
+
+```text
+Available CPU:        45%
+Available Memory:     60%
+
+Waiting Queue:
+Job A → CPU 20, Memory 10
+Job B → CPU 10, Memory 30
+Job C → CPU 35, Memory 20
+
+Running Jobs:
+4
+
+Forecast:
+CPU demand likely to increase soon
+```
+
+The PPO policy then chooses an action.
+
+Early versions may use simple actions such as:
+
+```text
+0 → Schedule the next eligible job
+1 → Wait / advance simulation time
+```
+
+Later versions may support richer actions:
+
+```text
+Choose job
+Choose node
+Wait
+Reject invalid allocation
+Request additional capacity
+```
+
+The PPO model learns through reward.
+
+---
+
+## 3. Agentic Layer — "Something unusual is happening. Investigate."
+
+The agentic layer is **not called for every workload**.
+
+Calling an LLM for every scheduling decision would increase cost and latency.
+
+Normal scheduling remains:
+
+```text
+Replay/Environment → Forecast → PPO → Action
+```
+
+The agent is activated only when the system detects unusual conditions such as:
+
+- queue growth beyond a threshold
+- repeated scheduling failures
+- unexpected workload spikes
+- large forecast errors
+- workload distribution drift
+- persistent resource starvation
+
+The agent can use tools such as:
+
+```text
+check_cluster_state()
+check_queue()
+check_forecast()
+check_failures()
+inspect_metrics()
+recommend_recovery()
+```
+
+The long-term goal is:
+
+```text
+Fast decisions → PPO
+
+Complex diagnosis and multi-step reasoning → Agent
+```
+
+---
+
+# Real-World Data
+
+The project is based on historical Google cluster workload data.
+
+The raw dataset contains information such as:
+
+```text
+time
+instance events
+collection identifiers
+priority
+machine assignment
+resource requests
+resource usage
+start time
+end time
+CPU usage distributions
+cluster identifiers
+event
+failure status
+```
+
+Example events include:
+
+```text
+SCHEDULE
+FINISH
+FAIL
+```
+
+These historical events describe what happened in Google's environment.
+
+However, the PPO agent should **not simply copy the historical `SCHEDULE` decision**.
+
+Instead:
+
+```text
+Historical data
+      │
+      ▼
+Extract workload behaviour
+      │
+      ▼
+Replay workload arrivals and resource requirements
+      │
+      ▼
+Our simulator recreates the scheduling problem
+      │
+      ▼
+Our PPO policy makes its own decision
+```
+
+---
+
+# Data Pipeline
+
+The raw dataset is transformed into two useful representations.
+
+## A. Replay Dataset
+
+Used by the simulator.
+
+Conceptually:
+
+| instance_id | arrival_time | cpu_request | memory_request | duration | priority |
+|---|---:|---:|---:|---:|---:|
+| A | 0 | 20 | 10 | 5 | 200 |
+| B | 1 | 30 | 20 | 8 | 360 |
+| C | 2 | 40 | 15 | 4 | 103 |
+
+The exact feature extraction will depend on the dataset schema and event semantics.
+
+---
+
+## B. Forecasting Dataset
+
+Used to train the GRU/LSTM.
+
+Historical workload information is aggregated into time windows.
+
+Example:
+
+| time_window | CPU demand | Memory demand | Job arrivals |
+|---|---:|---:|---:|
+| t1 | 30 | 40 | 5 |
+| t2 | 35 | 42 | 7 |
+| t3 | 45 | 50 | 10 |
+| t4 | 60 | 65 | 15 |
+
+The forecasting model learns:
+
+```text
+Past windows → Next workload/resource demand
+```
+
+---
+
+# Workload Replay Simulator
+
+Data replay means:
+
+> **Take historical workloads and release them into our simulator according to historical time order.**
+
+Example:
+
+```text
+Time 0 → Job A arrives
+Time 1 → Job B arrives
+Time 2 → Job C arrives
+Time 4 → Job D arrives
+```
+
+The simulator maintains:
+
+```text
+Future Workloads
+       │
+       ▼
+Waiting Queue
+       │
+       ▼
+Running Workloads
+       │
+       ▼
+Finished / Failed Workloads
+```
+
+A simplified simulation cycle:
+
+```text
+1. Advance simulated time
+2. Release workloads arriving at this time
+3. Add them to the waiting queue
+4. Remove completed workloads
+5. Release their resources
+6. Build the current environment state
+7. Get forecast information
+8. PPO selects an action
+9. Execute the action
+10. Calculate reward
+11. Repeat
+```
+
+---
+
+# Phase 1: Minimal Cluster Simulator
+
+The first implementation intentionally avoids unnecessary complexity.
+
+Initial simulator:
+
+```text
+Single Cluster
+
+Total CPU = fixed capacity
+Total Memory = fixed capacity
+
+Jobs:
+- arrive
+- wait
+- start
+- consume resources
+- finish or fail
+- release resources
+```
+
+Example:
+
+```text
+Cluster CPU = 100
+
+Job A requires 20 CPU
+Job B requires 30 CPU
+Job C requires 40 CPU
+```
+
+After A and B start:
+
+```text
+Used CPU = 50
+Free CPU = 50
+```
+
+If C starts:
+
+```text
+Used CPU = 90
+Free CPU = 10
+```
+
+When A finishes:
+
+```text
+20 CPU is released
+```
+
+This simulator is the foundation of the project.
+
+**No GRU, PPO, or LLM should be required before this phase works correctly.**
+
+---
+
+# Phase 2: Workload Forecasting
+
+Once replay works, train a GRU or LSTM on historical workload sequences.
+
+## Input
+
+```text
+Previous N time windows:
+
+CPU demand history
+Memory demand history
+Workload arrival history
+```
+
+## Output
+
+```text
+Next time window:
+
+Predicted CPU demand
+Predicted memory demand
+Predicted workload intensity / arrivals
+```
+
+The forecasting model becomes additional information available to the scheduler.
+
+---
+
+# Phase 3: Reinforcement Learning Scheduler
+
+The replay simulator becomes a custom RL environment.
+
+## State / Observation
+
+Possible features:
+
+```text
+Available CPU
+Available memory
+
+Current queue size
+Queue job features
+Running workload features
+
+Current simulated time
+
+GRU/LSTM demand forecast
+```
+
+## Action
+
+Initial action space:
+
+```text
+Schedule
+Wait
+```
+
+Later:
+
+```text
+Select job
+Select node
+Wait
+```
+
+## Reward
+
+The reward function should balance multiple objectives:
+
+```text
++ Successful scheduling
++ Useful resource utilization
++ Job completion
+
+- Excessive waiting time
+- Resource starvation
+- Invalid allocations
+- Failed scheduling decisions
+- Overload
+```
+
+The exact reward function will be experimentally designed and evaluated.
+
+---
+
+# Phase 4: Agentic Control Layer
+
+The agentic layer is an escalation mechanism rather than the main scheduler.
+
+```text
+                  NORMAL OPERATION
+
+Workload → Simulator → Forecast → PPO → Decision
+
+
+                  UNUSUAL OPERATION
+
+Anomaly / Drift / Failure
+            │
+            ▼
+      Agent Activated
+            │
+            ▼
+     Inspect system tools
+            │
+            ▼
+   Multi-step diagnosis
+            │
+            ▼
+ Recommendation / recovery
+            │
+            ▼
+      Safety validation
+```
+
+Possible agent responsibilities:
+
+- inspect queue growth
+- compare forecast with observed demand
+- detect repeated failures
+- investigate workload changes
+- recommend recovery actions
+- trigger predefined safe workflows
+
+The exact agent framework may evolve, but the design principle remains:
+
+> **Do not use an expensive reasoning system for decisions that a fast trained policy can make directly.**
+
+---
+
+# Project Architecture
+
+```text
+┌───────────────────────────────────────────────────────────────┐
+│                    HISTORICAL WORKLOAD DATA                   │
+│                    Google Cluster Traces                      │
+└───────────────────────────────┬───────────────────────────────┘
+                                │
+                                ▼
+┌───────────────────────────────────────────────────────────────┐
+│                   DATA PROCESSING PIPELINE                    │
+│                                                               │
+│  Cleaning → Event Analysis → Feature Extraction → Time Order │
+└───────────────────┬───────────────────────────┬───────────────┘
+                    │                           │
+                    ▼                           ▼
+        ┌──────────────────────┐    ┌──────────────────────────┐
+        │  Replay Dataset      │    │ Forecasting Dataset      │
+        │                      │    │                          │
+        │ arrival              │    │ CPU history              │
+        │ resources            │    │ memory history           │
+        │ duration             │    │ workload arrivals        │
+        │ priority             │    │                          │
+        └───────────┬──────────┘    └────────────┬─────────────┘
+                    │                            │
+                    ▼                            ▼
+        ┌──────────────────────┐    ┌──────────────────────────┐
+        │ Cluster Simulator   │    │ GRU / LSTM               │
+        │ Queue + Resources   │    │ Demand Forecast          │
+        └───────────┬──────────┘    └────────────┬─────────────┘
+                    │                            │
+                    └────────────┬───────────────┘
+                                 ▼
+                      ┌──────────────────────┐
+                      │ PPO RL Scheduler    │
+                      └──────────┬───────────┘
+                                 ▼
+                          Scheduling Action
+                                 │
+                                 ▼
+                      ┌──────────────────────┐
+                      │ Environment Result   │
+                      │ + Reward             │
+                      └──────────┬───────────┘
+                                 │
+                                 ▼
+                      ┌──────────────────────┐
+                      │ Agentic Escalation   │
+                      │ Only when required   │
+                      └──────────────────────┘
+```
+
+---
+
+# Development Roadmap
+
+## v0.1 — Data Understanding
+
+- [ ] Inspect raw dataset columns
+- [ ] Understand event semantics
+- [ ] Parse `resource_request`
+- [ ] Inspect resource usage fields
+- [ ] Identify workload lifecycle information
+- [ ] Remove irrelevant columns
+
+**Goal:** Understand the real data before building models.
+
+---
+
+## v0.2 — Data Processing
+
+- [ ] Create stable workload identifiers
+- [ ] Sort workloads/events chronologically
+- [ ] Extract arrival information
+- [ ] Extract CPU and memory requirements
+- [ ] Calculate or derive workload duration
+- [ ] Preserve useful priority information
+- [ ] Create processed datasets
+
+**Goal:** Produce a clean replay dataset and forecasting dataset.
+
+---
+
+## v0.3 — Replay Simulator
+
+- [ ] Simulation clock
+- [ ] Workload arrivals
+- [ ] Waiting queue
+- [ ] Running workloads
+- [ ] Resource accounting
+- [ ] Completion handling
+- [ ] Failure handling
+
+**Goal:**
+
+```text
+Job arrives
+→ Queue
+→ Run
+→ Consume resources
+→ Finish
+→ Release resources
+```
+
+---
+
+## v0.4 — Forecasting
+
+- [ ] Build time-window features
+- [ ] Train GRU baseline
+- [ ] Optionally compare with LSTM
+- [ ] Evaluate forecasting accuracy
+- [ ] Export trained model
+
+**Goal:** Predict future workload/resource demand.
+
+---
+
+## v0.5 — Reinforcement Learning
+
+- [ ] Convert simulator into Gymnasium environment
+- [ ] Define observations
+- [ ] Define action space
+- [ ] Design reward
+- [ ] Train PPO
+- [ ] Track training metrics
+
+**Goal:** Learn scheduling decisions through interaction.
+
+---
+
+## v0.6 — Baselines and Evaluation
+
+Compare PPO against simpler schedulers:
+
+- [ ] FIFO
+- [ ] Greedy scheduling
+- [ ] Priority-based heuristic
+- [ ] Other justified baselines
+
+Possible metrics:
+
+```text
+Average waiting time
+Job completion rate
+Resource utilization
+Queue length
+Scheduling failures
+Starvation
+```
+
+**Goal:** Demonstrate whether the learned policy actually improves outcomes.
+
+---
+
+## v0.7 — Agentic Layer
+
+- [ ] Detect abnormal situations
+- [ ] Add system-inspection tools
+- [ ] Add agent workflow
+- [ ] Add safety validation
+- [ ] Log agent decisions
+- [ ] Measure additional latency/cost
+
+**Goal:** Add meaningful agentic behaviour without putting an LLM in the critical scheduling path.
+
+---
+
+# Technology Stack
+
+| Area | Technology |
+|---|---|
+| Programming | Python |
+| Data Processing | Pandas, NumPy |
+| Visualization | Matplotlib / Plotly |
+| Deep Learning | PyTorch |
+| Forecasting | GRU / LSTM |
+| Reinforcement Learning | Gymnasium + Stable-Baselines3 PPO |
+| Agentic Workflow | LangGraph or equivalent |
+| Data Storage | Parquet / CSV |
+| Experiment Tracking | TensorBoard / MLflow (optional) |
+| Containerization | Docker (later phase) |
+| Deployment / Cluster | Kubernetes/K3s (future extension) |
+
+---
+
+# Repository Structure
+
+```text
 aegiscloud/
-├── simulator/
-│   ├── AegisEnv.py                 # Custom Gymnasium multi-resource simulator
-│   ├── BorgWorkloadGenerator.py    # Pareto distribution (hogs & mice) traffic generator
-│   └── train_fast_loop.py          # Stable-Baselines3 training script for PPO
-├── cluster/
-│   ├── aegis_scheduler.py          # Custom K8s scheduler daemon using Python Client
-│   ├── Dockerfile                  # Containerization for deployment
-│   └── manifests/
-│       ├── rbac.yaml               # ClusterRoles for manual Pod binding
-│       └── deployment.yaml         # Custom scheduler pod specs
-├── governor/
-│   ├── sre_governor.py             # Stateful LangGraph multi-agent loop
-│   ├── telemetry_scraper.py        # PromQL metric fetcher
-│   └── playbooks_db/               # ChromaDB SRE playbook embeddings
-└── README.md                       # High-level conceptual project overview (This file)
-``` -->
+│
+├── data/
+│   ├── raw/
+│   ├── processed/
+│   └── samples/
+│
+├── notebooks/
+│   ├── 01_data_exploration.ipynb
+│   ├── 02_data_processing.ipynb
+│   ├── 03_replay_validation.ipynb
+│   ├── 04_forecasting.ipynb
+│   └── 05_rl_experiments.ipynb
+│
+├── src/
+│   ├── data/
+│   │   ├── preprocessing.py
+│   │   └── feature_engineering.py
+│   │
+│   ├── simulator/
+│   │   ├── cluster.py
+│   │   ├── queue.py
+│   │   ├── workload.py
+│   │   └── replay.py
+│   │
+│   ├── forecasting/
+│   │   ├── dataset.py
+│   │   ├── gru.py
+│   │   └── train.py
+│   │
+│   ├── rl/
+│   │   ├── environment.py
+│   │   ├── reward.py
+│   │   ├── train.py
+│   │   └── evaluate.py
+│   │
+│   └── agent/
+│       ├── tools.py
+│       ├── workflow.py
+│       └── guardrails.py
+│
+├── tests/
+├── requirements.txt
+└── README.md
+```
+
+---
+
+# Experimental Questions
+
+The project should answer measurable questions rather than assuming AI is automatically better.
+
+1. Can workload forecasting improve scheduling decisions?
+2. Does PPO outperform FIFO or simple heuristics?
+3. Does forecast information improve PPO performance?
+4. What happens when workload patterns change?
+5. When does the agentic layer provide value?
+6. What latency and cost does the agentic layer add?
+7. How robust is the policy to workload distributions not seen during training?
+
+---
+
+# Important Design Principles
+
+## 1. Real data first
+
+The simulator should be driven by real workload behaviour rather than purely random job generation.
+
+## 2. Build the system incrementally
+
+The project should work at every major stage.
+
+```text
+Data
+→ Simulator
+→ Forecasting
+→ RL
+→ Agentic layer
+```
+
+## 3. Baselines are mandatory
+
+A complicated PPO model is not useful unless it is compared against simpler scheduling strategies.
+
+## 4. Agentic AI is not the fast path
+
+LLM reasoning should be reserved for situations where additional reasoning and multi-step investigation are useful.
+
+## 5. Avoid buzzword stacking
+
+Every component must have a measurable responsibility:
+
+```text
+GRU/LSTM → Prediction
+PPO      → Fast decision making
+Agent    → Investigation and recovery
+Simulator → Environment and evaluation
+```
+
+---
+
+# Current Status
+
+🚧 **Under active development**
+
+Current focus:
+
+```text
+Google Cluster Data
+        ↓
+Understand event semantics
+        ↓
+Extract workload lifecycle
+        ↓
+Create processed replay dataset
+```
+
+The immediate goal is to successfully reproduce:
+
+```text
+Workload arrives
+        ↓
+Waiting Queue
+        ↓
+Scheduling decision
+        ↓
+Running
+        ↓
+Finish / Fail
+        ↓
+Resources released
+```
+
+Only after this foundation is validated will forecasting and reinforcement learning be added.
+
+---
+
+# Future Extensions
+
+Possible future versions include:
+
+- multi-node scheduling
+- heterogeneous CPU/memory capacities
+- dynamic capacity scaling
+- Kubernetes integration
+- live telemetry
+- workload drift detection
+- policy switching between trained schedulers
+- agent-assisted incident response
+- dashboard and experiment visualization
+
+---
+## Author
+
+**Deepanshu Sharma**
+
+---
