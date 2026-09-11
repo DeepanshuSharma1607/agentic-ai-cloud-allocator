@@ -1,6 +1,10 @@
 # AegisCloud
 ### Predictive, Reinforcement-Learning-Based Cloud Resource Allocation with an Agentic Decision Gate
 
+**Authors:** Deepanshu Sharma, Yugam, Akshat, and Samarth Mehrotra
+**License:** Apache License 2.0
+### Predictive, Reinforcement-Learning-Based Cloud Resource Allocation with an Agentic Decision Gate
+
 AegisCloud is an experimental cloud resource management system designed to answer a practical question:
 
 > **Can a cloud scheduler predict an upcoming workload peak, prepare resources before the peak arrives, and still avoid wasting money and infrastructure when the predicted peak does not materialize?**
@@ -1006,3 +1010,9 @@ The project should distinguish clearly between:
 - what these papers establish,
 - what AegisCloud implements,
 - and what AegisCloud proposes as a new experimental integration.
+
+## License
+
+Copyright (c) 2026 Deepanshu Sharma, Yugam, Akshat, and Samarth Mehrotra
+
+This project is licensed under the Apache License 2.0. See the [LICENSE](LICENSE) file for the full license text.
