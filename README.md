@@ -1,8 +1,8 @@
-# AegisCloud
+# Agentic AI Cloud Resource Allocator and Auto-Scaling
 
 ### Predictive Reinforcement Learning for Cloud Resource Allocation with a Selective LLM-Based Auditor
 
-AegisCloud is a research project for making cloud resource allocation more efficient
+This Project is a research project for making cloud resource allocation more efficient
 and reliable.
 
 The main idea is simple:
@@ -116,7 +116,7 @@ intervention is actually allowed to execute.
 
 ## 4. Data Model
 
-AegisCloud uses **continuous telemetry**, not discrete job records — the workload is
+This Project uses **continuous telemetry**, not discrete job records — the workload is
 modeled as a request-rate time series (like a live web/delivery service), not a queue
 of individually-scheduled batch jobs. This was a deliberate choice: it matches the
 target use case (an app with fluctuating live traffic) much more closely than a
@@ -316,7 +316,7 @@ are documented as future work rather than required scope.
 
 ## 13. Limitations
 
-AegisCloud is a research prototype, not a production autoscaler. Known limitations to
+This Project is a research prototype, not a production autoscaler. Known limitations to
 report explicitly rather than hide:
 - Synthetic workload realism, however carefully modeled, is not real production traffic
 - Forecasting and RL training stability are not guaranteed and will be evaluated, not assumed
