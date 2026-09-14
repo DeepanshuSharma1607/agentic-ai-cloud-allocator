@@ -1,4 +1,4 @@
-# Agentic AI Cloud Resource Allocator and Auto-Scaling
+# Agentic AI for Cloud Resource Allocation and Auto-Scaling
 
 ### Predictive Reinforcement Learning for Cloud Resource Allocation with a Selective LLM-Based Auditor
 
