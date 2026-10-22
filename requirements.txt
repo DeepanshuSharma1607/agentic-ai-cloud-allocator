@@ -6,3 +6,6 @@ joblib
 matplotlib
 gdown
 ipykernel
+requests
+python-dotenv
+langgraph
