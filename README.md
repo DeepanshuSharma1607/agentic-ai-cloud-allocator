@@ -1,85 +1,195 @@
 # AegisCloud
 
-**An agentic autoscaler for any containerized app.** A forecaster and plain-code autoscaler do the daily work. An LLM "governor" wakes up only when needed, changes one safety setting, and asks a human when it is unsure. Every action passes a guardrail written in code.
+**An agentic autoscaler for containerized apps.** An LSTM forecasts traffic 10 minutes ahead. A LangGraph agent runs once per minute, stores the forecast, builds a short report, and decides how many replicas to run. Plain code handles most minutes. An LLM is called only on a timer or when something unusual happens. When something is really wrong, the LLM writes an urgent email to a human with the last hour of logs.
 
-> **Status (22 Oct 2026):** the forecaster is built and evaluated. The simulator, policy comparison, demo app and agent are **not built yet**. See [Roadmap](#roadmap). Nothing below claims results that do not exist.
+> **Status (23 Oct 2026):** the forecaster is built and evaluated. The LangGraph agent is written and tested on synthetic data with a stub forecaster, a fake LLM and mocked Gemini, Mistral and SMTP. It has **not** yet been run on the real dataset with the real LSTM or the real LLM APIs. The simulator, policy comparison, dashboard and Docker/Kubernetes connection are **not built yet**. See [Roadmap](#roadmap).
 
 ---
 
 ## Why this project
 
-Normal autoscaling (for example AWS target tracking and predictive scaling) follows simple rules. It cannot:
+Rule-based autoscalers (CPU above 70%, target tracking) react after traffic has already grown. A new replica takes about 2 minutes to start, so acting early matters. They also cannot explain what is happening, stop a runaway scale-up caused by a bug, or ask a human for help.
 
-- say **why** traffic is high (a sale or an attack),
-- stop a **runaway** scale-up caused by a bug (for example a memory-leak crash loop) that inflates the bill,
-- **explain itself** or ask a human for help.
-
-A forecaster alone is not new, since AWS already offers one. The value here has to come from the **agent layer**: explanations, safety limits, attack-versus-sale reasoning, runaway protection and human escalation.
-
-## Claims to prove
-
-- **A.** Forecast-based scaling uses fewer replicas than a threshold rule at the same or lower SLO-miss time.
-- **B.** Under changing conditions, an agent that adjusts headroom and escalates keeps SLO-miss inside a budget, compared with a simple rule-based controller.
-- If B shows the agent only matches the controller, that gets reported as is. The likely honest result is "same numbers, plus explanations and escalation".
-
----
-
-## Architecture
-
-```
-App traffic (requests per minute)
-   -> Forecaster: predicts traffic 10 to 60 min ahead        (no LLM)
-   -> Autoscaler (plain code, always on): sets replica count (no LLM)
-         |  short JSON summary, only on a trigger
-         v
-      LLM governor -> Guardrail (code) -> apply, or message a human
-         v
-   Audit log (SQLite) + dashboard + evaluation
-```
-
-**Autoscaler formula:**
-`replicas = predicted traffic / (capacity of one replica x target utilization)`.
-Example: one replica handles 100 req/s, target is 60%, forecast is 600, so 10 replicas.
-
-**Headroom** is the single dial: the target utilization. Lower means more spare room (safer, costlier). Higher means cheaper and riskier.
+AegisCloud splits the work:
 
 | Part | Job | LLM? |
 |---|---|---|
-| Forecaster | Predicts future traffic | No |
-| Autoscaler | Applies the formula | No |
-| LLM governor | Adjusts headroom, explains spikes, stops runaway scaling, escalates | Yes, rarely |
-| Guardrail | Checks every decision against fixed rules | No |
-| Audit log | Saves every decision with reasons and before/after metrics | No |
+| Forecaster (LSTM) | Predicts traffic 10 minutes ahead | No |
+| `auto_scale` | Plain formula, runs on most minutes | No |
+| LLM governor (`llm_timer`, `llm_unusual`) | Reads a report of the last 10 minutes, checks the situation, fixes the replica count | Yes, rarely |
+| Guardrail | Limits every decision, whoever made it | No |
+| `alert_human` | LLM writes an urgent email with the last hour of logs | Yes, only when something is wrong |
 
-**LLM triggers:** capacity short for a sustained period, forecast error suddenly large, or a routine check every 6 hours. It reads a short JSON summary, never raw logs, and is never called per request.
-
-**Allowed actions (allowlist):** change target utilization within bounds and small steps, cap replicas to a budget, switch to a safe static policy, message the engineer with options and a recommendation. It may **never** run commands, delete anything or change code.
-
-### Design decisions
-
-| Decision | Reason |
-|---|---|
-| No reinforcement learning | Training risk, reward design, hard to defend |
-| Real data only | An earlier version used a fake dataset |
-| Simple forecaster first, LSTM optional | Keep the LSTM only if it clearly beats the simple model |
-| LLM runs rarely, never per request | Token cost and reliability |
-| Plain-code fast path always on | Something must keep working while the LLM sleeps |
-| Guardrail in code | A system prompt is not a safety mechanism |
-| Simulator and evaluation come first | Without them there is no result |
+The LLM is never called per request and never on every minute.
 
 ---
 
-## What is built: the forecaster
+## How the agent works
 
-**Task:** at minute `t`, predict traffic at `t + 10` (a new replica takes about 2 minutes to start, so acting early matters).
+```mermaid
+flowchart TD
+    A[store_prediction] --> B[trigger_check]
+    B --> C[script_creator]
+    C -->|unusual| D[llm_unusual]
+    C -->|timer| E[llm_timer]
+    C -->|auto| F[auto_scale]
+    D --> G[apply_and_log]
+    E --> G
+    F --> G
+    G -->|problem found| H[alert_human]
+    G -->|all fine| I((end of minute))
+    H --> I
+```
 
-**Data:** Azure Functions invocation counts per minute, `azure_functions_ranked_timeseries.csv`: 20,160 minutes (14 days) x 318 apps, no missing or negative values. Six apps were used, chosen from busy to quiet: `app_1, app_62, app_123, app_185, app_248, app_318`. The original Azure trace layout was not re-verified for this README.
+One pass through the graph is one "minute". `agent/run.py` replays the dataset one row per minute.
 
-**Fair test:** time split 70/30 (no shuffling), features use only the past, and every method is scored on the same test minutes (6,038 per app).
+| Node | What it does |
+|---|---|
+| `store_prediction` | Gets this minute's traffic, runs the LSTM for the forecast at +10 min, appends one row to `data/predictions.csv` |
+| `trigger_check` | Picks the mode. Priority: **unusual > timer > auto** |
+| `script_creator` | Writes a text report of the last 10 minutes: actual traffic, what was predicted earlier for that minute, the error, the new forecast, replicas, and the last 3 actions |
+| `llm_unusual` | LLM call because something unusual happened |
+| `llm_timer` | LLM call because the timer is due |
+| `auto_scale` | No LLM. Scales up at once, scales down only when the last 10 minutes all needed fewer replicas |
+| `apply_and_log` | Runs the guardrail, sets replicas, writes `data/actions.csv`, decides whether an alert is needed |
+| `alert_human` | Only if something is wrong. The LLM writes the email, it is saved in `data/alerts/` and sent if email is enabled |
 
-**Methods:** `naive`, `moving_avg`, `yesterday`, `gbm` (HistGradientBoosting on lags, rolling stats, yesterday and time of day), `gbm_q90` (same, 90th percentile), `lstm` (PyTorch, 60-minute window, MSE), `lstm_q90` (pinball loss).
+### The three modes (decided in plain code)
 
-### Results (mean over 6 apps)
+| Mode | When | Default |
+|---|---|---|
+| `unusual` | Forecast jumps more than 30% in one minute (and is above 50% of capacity), or forecast or traffic is above 95% of capacity, or forecast error over the last 5 minutes is above 50% | cooldown 3 min |
+| `timer` | Every N minutes since the last LLM check. An unusual call resets the timer | every 5 min |
+| `auto` | Everything else | |
+
+### Guardrail
+
+Applied to every decision, LLM or auto: replicas stay between min and max, a single decision can at most double the replicas (always +2 allowed) and at most remove 25% (always -1 allowed). The LLM answer is also checked: it must be a JSON object with a numeric `replicas`. If the LLM times out, has no key, or returns garbage, the agent holds the current replicas and records the error.
+
+### Alerts
+
+An alert fires when:
+
+1. the LLM sets `"escalate": true` (scaling cannot fix it: attack-like traffic, a bug, unreliable forecasts),
+2. the LLM call failed,
+3. traffic was above capacity for 5 minutes in a row, or
+4. replicas are at the maximum and traffic is still above capacity.
+
+A 30-minute cooldown prevents email spam. The email is written by the LLM from the last 60 minutes of data and may only use numbers from that report. If the LLM cannot write it, a plain-code version is used, so an alert is never lost. Two CSV files are attached: `last_hour_predictions.csv` and `last_actions.csv`.
+
+### Output files (`agent/data/`, created on each run)
+
+| File | Content |
+|---|---|
+| `predictions.csv` | `minute, traffic_now, forecast, forecast_for, replicas`, one row per minute |
+| `actions.csv` | `minute, mode, reason, traffic_now, forecast, replicas_before, proposed, applied, action, decision_reason`, one row per LLM call or replica change |
+| `alerts/alert_<minute>.txt` | Every urgent email, including its send status |
+
+---
+
+## Repository layout
+
+```
+Major_Project/
+  data/dataset.csv          Azure Functions per-minute traffic, 318 apps (large, do not open in an editor)
+  models/                   one LSTM per app (app_1, app_62, app_123, app_185, app_248, app_318) + meta.json
+  notebook/
+    lstm_model.ipynb        data exploration and forecaster comparison
+    predict.py              loads a model and predicts traffic 10 minutes ahead
+    notebook_readme.md
+  agent/                    the LangGraph agent (see below)
+    config.py               every setting in one place
+    state.py                the dictionary passed between nodes
+    llm.py                  fake / Gemini / Mistral, reply checking, alert email writer
+    mailer.py               SMTP email sender
+    nodes.py                the 8 nodes
+    graph.py                the wiring
+    run.py                  start here
+    requirements.txt  .env.example  .gitignore  README.md
+  src/live_simulator.py     empty placeholder for the future simulator
+  Reaserch_Papers/          papers used for the project
+  requirements.txt          notebook and forecaster dependencies
+```
+
+---
+
+## Quick start
+
+**1. Install**
+
+```bash
+uv pip install -r requirements.txt -r agent/requirements.txt
+```
+
+**2. Check the forecaster alone** (from the `notebook` folder)
+
+```bash
+python predict.py --app app_62 --backtest
+```
+
+**3. Run the agent with the fake LLM** (free, no keys, from the project root)
+
+```bash
+python agent/run.py --minutes 120 --tick 0
+```
+
+**4. Use a real LLM.** Copy `agent/.env.example` to `agent/.env` and fill in the key you need:
+
+```
+GEMINI_API_KEY=...
+MISTRAL_API_KEY=...
+```
+
+```bash
+python agent/run.py --provider gemini --timer 3 --minutes 60
+python agent/run.py --provider mistral
+```
+
+**5. Send real alert emails.** Add these to `agent/.env`. For Gmail, turn on 2-step verification and create an app password (your normal password will not work):
+
+```
+EMAIL_SENDER=your_address@gmail.com
+EMAIL_PASSWORD=your_app_password
+EMAIL_TO=person_to_alert@example.com
+```
+
+```bash
+python agent/run.py --provider gemini --email
+```
+
+If email is on but the settings are missing, the agent warns you and saves the alerts as files only.
+
+### `run.py` options
+
+| Option | Meaning |
+|---|---|
+| `--minutes N` | Replay N minutes (default: until the data ends) |
+| `--tick S` | Seconds between minutes (default 1, `0` = as fast as possible) |
+| `--timer N` | Minutes between normal LLM checks (default 5) |
+| `--app app_1` | Which app to replay (needs a model file for it) |
+| `--provider` | `fake`, `gemini` or `mistral` |
+| `--email` | Really send alert emails |
+| `--quiet` | Print only minutes with an LLM call, a replica change or an alert |
+
+`Ctrl+C` stops safely. The CSV files are already written and a summary is printed.
+
+### Settings (`agent/config.py`)
+
+All tuning is in this one file: replay start (70% point of the data), capacity per replica (computed so the average training load needs 5 replicas), timer, the three "unusual" thresholds, guardrail limits, alert rules, SMTP settings and LLM model names (`gemini-flash-latest`, `mistral-small-latest`). If your key rejects a model name, change it there.
+
+---
+
+## The forecaster
+
+**Task:** at minute `t`, predict traffic at `t + 10`.
+
+**Data:** Azure Functions invocation counts per minute: 20,160 minutes (14 days) for 318 apps. Six apps were modelled, from busy to quiet: `app_1, app_62, app_123, app_185, app_248, app_318`.
+
+**Fair test:** time split 70/30 with no shuffling, features use only the past, every method is scored on the same test minutes (6,038 per app).
+
+**Methods compared:** `naive`, `moving_avg`, `yesterday`, `gbm` (HistGradientBoosting), `gbm_q90`, `lstm` (PyTorch, 60-minute window), `lstm_q90`.
+
+### Results from the notebook (mean over 6 apps)
 
 | Method | WAPE | under_10pct | over_10pct |
 |---|---|---|---|
@@ -91,122 +201,55 @@ Example: one replica handles 100 req/s, target is 60%, forecast is 600, so 10 re
 | naive | 0.361 | 0.102 | 0.109 |
 | lstm_q90 | 0.472 | **0.014** | 0.266 |
 
-- **WAPE** = total absolute error / total traffic (lower is better).
-- **under_10pct** = share of minutes predicted more than 10% too low (risk of slowness).
-- **over_10pct** = share of minutes predicted more than 10% too high (wasted cost).
+WAPE is total absolute error divided by total traffic (lower is better). `under_10pct` is the share of minutes predicted more than 10% too low (risk of slowness). `over_10pct` is the share predicted more than 10% too high (wasted cost).
 
-### What the numbers really say
+What the numbers say, without overselling:
 
-1. **LSTM vs GBM is a tie.** The 0.002 gap comes from one bursty app (`app_185`). Without it both score 0.030. One seed, 6 apps.
-2. **Simple baselines win on smooth apps.** `moving_avg` beats both learned models on `app_1` and `app_123`.
-3. **`app_185` is not solved.** WAPE near 1.0 for every method. This is where the agent layer should matter more than the forecaster.
-4. **The 90th-percentile models almost never under-predict**, but over-predict in about 26% of minutes. `gbm_q90` is the better safety option. `lstm_q90` is worse (0.472 vs 0.308).
-5. **The final choice between GBM and LSTM is open.** Decide it with simulator results (replica-minutes and SLO-miss minutes), not WAPE alone.
+- **LSTM and GBM are a tie.** The 0.002 gap comes from one bursty app (`app_185`). One seed, 6 apps.
+- **Simple baselines win on smooth apps** (`moving_avg` beats both learned models on `app_1` and `app_123`).
+- **`app_185` is not solved.** WAPE is near 1.0 for every method.
+- WAPE is a forecasting score, not a cost or SLO score. The final choice of forecaster should be decided by a simulator.
+
+Each `.pt` file holds the weights plus scaling values (`mu`, `sd`, `dsd`), `n_static`, `W=60` and `H=10`. Models are **per app**: a new app needs its own training run.
 
 ---
 
-## Saved model bundle: `aegiscloud_best_lstm.zip`
+## What is tested and what is not
 
-| File | Content |
+| Item | State |
 |---|---|
-| `app_1.pt, app_62.pt, app_123.pt, app_185.pt, app_248.pt, app_318.pt` | One LSTM per app (about 89 KB each) |
-| `meta.json` | `{"method": "lstm", "H": 10, "W": 60, "apps": [...]}` |
+| Forecaster evaluation | Done in the notebook |
+| Agent graph, all 8 nodes, routing, guardrail, alert cooldown, CSV outputs, `run.py` options and Ctrl+C | Tested end to end on synthetic data with a stub forecaster |
+| Fake LLM, mocked Gemini and Mistral (fenced JSON, junk reply, blocked reply, timeout, no key), mocked SMTP (success, failure, missing settings) | Tested |
+| Agent with the **real LSTM and real dataset** | **Not run yet** |
+| **Real** Gemini and Mistral API calls | **Not run yet** |
+| **Real** email sending | **Not run yet** |
 
-Each `.pt` file is a dict with: `state` (weights), `mu`, `sd` (input scaling), `dsd` (output scaling), `n_static` (4), `W` (60), `H` (10).
-
-Models are **per app**. A new app needs its own training run. Exporting the LSTM does not mean it was proven better than the GBM (see above).
-
-### Load a model
-
-The class `LSTMForecaster` is defined in the notebook (1-layer LSTM, hidden 64, then a small head). Copy it into `src/forecaster.py` first.
-
-```python
-import torch
-ckpt = torch.load("app_62.pt", map_location="cpu")
-model = LSTMForecaster(ckpt["n_static"])
-model.load_state_dict(ckpt["state"])
-model.eval()
-```
-
-Inference input: the last `W` minutes of `log1p(traffic)`, normalized with `(v - mu) / sd`, plus 4 static features (yesterday's value, yesterday's change, sin and cos of time of day). The output is a scaled change in log traffic:
-`prediction = expm1(out * dsd + log1p(traffic_now))`. The feature code is `make_features` in the notebook.
-
----
-
-## Repository layout
-
-**Today:**
-
-```
-aegiscloud.ipynb               exploration + forecaster comparison (Colab)
-aegiscloud_best_lstm.zip       saved LSTM per app
-README.md
-```
-
-**Planned:**
-
-```
-aegiscloud/
-  data/            download script only
-  src/             loader, forecaster, simulator, policies, controller, metrics
-  src/agent/       governor, actions (allowlist), guardrail
-  experiments/     one script per experiment
-  app/             Streamlit app
-  tests/           simulator tests and the five scenarios
-  results/         plots and tables
-```
-
-## Run the notebook
-
-1. Open `aegiscloud.ipynb` in Google Colab (a T4 GPU speeds up the LSTM).
-2. Put `azure_functions_ranked_timeseries.csv` at the path set in the first code cell (the notebook mounts Google Drive).
-3. Run all cells. The last cell exports the best trainable model as a zip.
-
-Requirements: Python 3.11, numpy, pandas, matplotlib, scikit-learn, PyTorch, joblib.
-
----
-
-## Evaluation plan (not run yet)
-
-- **Simulator:** Python, 1-minute steps, replays the trace, includes a replica start-up delay of about 2 minutes. Without it, reactive rules look unfairly good.
-- **Policies:** (1) threshold rule, CPU above 70% adds a replica; (2) target-tracking style; (3) forecast plus schedule; (4) forecast plus agent; plus a simple rule-based controller as the honest test for the agent.
-- **Metrics:** replica-minutes (cost), minutes with capacity below demand (SLO miss), flapping count, number of agent actions, number of LLM calls.
-- **Reporting:** spread over several trace slices, not one number. Time split only, never evaluate on training data.
-
-### Five scenarios (also the agent's acceptance tests)
-
-1. **Routine drift:** shortfalls creep up, the agent raises headroom slightly.
-2. **Flash sale:** scale within a budget, explain why.
-3. **Attack-like burst:** do not scale blindly, escalate to a human.
-4. **Memory-leak crash loop:** stop runaway scaling, report the pattern.
-5. **Forecast suddenly wrong:** fall back to the safe static policy and ask the human.
+The thresholds in `config.py` (30% spike, 95% capacity, 50% forecast error) are first guesses and need tuning after a real run.
 
 ---
 
 ## Roadmap
 
-| Phase | Work | Status |
-|---|---|---|
-| 1 | Data exploration, time split, baselines, GBM and LSTM forecasters | Done |
-| 1 | Simulator with start-up delay, SLO-miss and cost metrics, threshold and target-tracking policies | To do |
-| 1 | Forecast + schedule policy, results table, cost-versus-miss chart | To do |
-| 1 | Streamlit demo with a headroom slider, tests, demo video | To do |
-| 2 | Rule-based controller, then LangGraph governor, guardrail, audit log, five scenarios, agent vs controller comparison | To do |
-| 3 | Optional: better forecaster (only if it wins), small live demo on K3s with Prometheus and k6, short write-up | To do |
-
-The original plan targeted a working model by 25 Oct 2026. The simulator is the critical missing piece.
-
-## Tech stack
-
-- **Now:** Python 3.11, pandas, numpy, scikit-learn, PyTorch, matplotlib
-- **Next:** Streamlit, pytest
-- **Agent stage:** LangGraph, pydantic (action schemas), SQLite or JSONL log, any LLM with structured JSON output
-- **Optional:** Docker, K3s or kind, Prometheus, k6 or Locust
+| Step | Status |
+|---|---|
+| Data exploration, baselines, GBM and LSTM forecasters | Done |
+| LangGraph agent: store, trigger, script, three branches, guardrail, logging, alert email | Written, synthetic-tested |
+| First real run (real model, real data, real LLM) and threshold tuning | Next |
+| Simulator with a 2-minute replica start-up delay, SLO-miss and replica-minute metrics | To do (`src/live_simulator.py` is empty) |
+| Compare policies: threshold rule, target tracking, forecast + schedule, forecast + agent | To do |
+| Connect `set_replicas()` to Docker or Kubernetes | To do |
+| Dashboard, tests, demo video | To do |
 
 ## Limitations
 
-- Only 6 of 318 apps tested, one seed, one split, 14 days of data.
-- WAPE is a forecasting score, not a cost or SLO score. The simulator decides.
-- The test data is replayed history, so scaling decisions cannot change user behavior.
-- The agent's extra value is the hardest part to measure.
+- Only 6 of 318 apps have models. One seed, one split, 14 days of data.
+- `set_replicas()` is a placeholder. In the replay, new replicas count as instant, so the "minutes above capacity" number in the run summary is optimistic.
+- The agent is not yet compared against a rule-based controller. Its added value over plain rules is not measured. If a simulator shows it only matches the rules, that should be reported as is.
+- **Design change from the first plan:** the early plan had the LLM only adjust one safety setting (headroom). In the current agent the LLM proposes a replica count, bounded by the guardrail. This is easier to explain but gives the LLM more influence, so the guardrail and the alert rules matter.
+- The replayed data is history, so scaling decisions cannot change user behavior.
 - This is a student portfolio project, not a production autoscaler.
+
+## License
+
+See the `LICENSE` file.
