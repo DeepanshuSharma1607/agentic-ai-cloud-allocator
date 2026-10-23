@@ -2,7 +2,7 @@
 
 **An agentic autoscaler for containerized apps.** An LSTM forecasts traffic 10 minutes ahead. A LangGraph agent runs once per minute, stores the forecast, builds a short report, and decides how many replicas to run. Plain code handles most minutes. An LLM is called only on a timer or when something unusual happens. When something is really wrong, the LLM writes an urgent email to a human with the last hour of logs.
 
-> **Status (23 Oct 2026):** the forecaster is built and evaluated. The LangGraph agent is written and tested on synthetic data with a stub forecaster, a fake LLM and mocked Gemini, Mistral and SMTP. It has **not** yet been run on the real dataset with the real LSTM or the real LLM APIs. The simulator, policy comparison, dashboard and Docker/Kubernetes connection are **not built yet**. See [Roadmap](#roadmap).
+> **Status (24 Oct 2026):** the forecaster is built and evaluated. The LangGraph agent now runs end to end with the **real LSTM, the real dataset and the real Gemini API** (a 134-minute replay is saved in `agent/data/`). Alert emails can be sent through Gmail. The agent is **not** yet compared with a rule-based autoscaler, the simulator and dashboard are **not built yet**, and `set_replicas()` is still a placeholder. See [Roadmap](#roadmap).
 
 ---
 
@@ -71,7 +71,7 @@ Applied to every decision, LLM or auto: replicas stay between min and max, a sin
 An alert fires when:
 
 1. the LLM sets `"escalate": true` (scaling cannot fix it: attack-like traffic, a bug, unreliable forecasts),
-2. the LLM call failed,
+2. the LLM call failed **2 times in a row** (`LLM_FAILURES_BEFORE_ALERT`; one busy-server error is not an emergency),
 3. traffic was above capacity for 5 minutes in a row, or
 4. replicas are at the maximum and traffic is still above capacity.
 
@@ -97,67 +97,81 @@ Major_Project/
     lstm_model.ipynb        data exploration and forecaster comparison
     predict.py              loads a model and predicts traffic 10 minutes ahead
     notebook_readme.md
-  agent/                    the LangGraph agent (see below)
+  agent/                    the LangGraph agent
     config.py               every setting in one place
     state.py                the dictionary passed between nodes
-    llm.py                  fake / Gemini / Mistral, reply checking, alert email writer
+    llm.py                  fake / Gemini / Mistral, retries, fallback model, reply checking, alert email writer
     mailer.py               SMTP email sender
     nodes.py                the 8 nodes
     graph.py                the wiring
     run.py                  start here
-    requirements.txt  .env.example  .gitignore  README.md
-  src/live_simulator.py     empty placeholder for the future simulator
+    .env.example            copy to agent/.env and fill in your keys
+    README.md               how the agent works, in detail
+  test/
+    llm_tester.py           checks llm.py alone (decision + alert email text)
+    graph_tester.py         runs the real graph for 12 minutes and checks everything (30 checks)
+  learning/learn_agent.md   the agent explained file by file, for beginners
   Reaserch_Papers/          papers used for the project
-  requirements.txt          notebook and forecaster dependencies
+  requirements.txt          all dependencies (notebook, forecaster and agent)
 ```
+
+`src/live_simulator.py` (the future simulator) does not exist yet.
 
 ---
 
 ## Quick start
 
+Commands are for the project root (`Major_Project/`). On Windows use PowerShell.
+
 **1. Install**
 
 ```bash
-uv pip install -r requirements.txt -r agent/requirements.txt
+pip install -r requirements.txt        # or: uv pip install -r requirements.txt
 ```
 
-**2. Check the forecaster alone** (from the `notebook` folder)
+**2. Check the forecaster alone** (expect WAPE close to 0.027)
 
 ```bash
-python predict.py --app app_62 --backtest
+python notebook/predict.py --app app_62 --backtest
 ```
 
-**3. Run the agent with the fake LLM** (free, no keys, from the project root)
+**3. Check the LLM layer alone** (nothing is saved, no email is sent)
 
 ```bash
-python agent/run.py --minutes 120 --tick 0
+python test/llm_tester.py --provider fake       # no internet, no key
+python test/llm_tester.py --provider gemini     # needs the key in agent/.env
 ```
 
-**4. Use a real LLM.** Copy `agent/.env.example` to `agent/.env` and fill in the key you need:
+**4. Check the whole graph** (real LSTM, real data, 12 minutes, writes only to `test/output/`)
+
+```bash
+python test/graph_tester.py                          # fake LLM:  28 checks
+python test/graph_tester.py --provider gemini        # real LLM:  29 checks
+python test/graph_tester.py --provider gemini --send-email   # also sends ONE real email: 30 checks
+```
+
+Every line must say `[PASS]`. The exit code is 0 when all checks pass.
+
+**5. Run the agent**
+
+```bash
+python agent/run.py --minutes 120 --tick 0                            # fake LLM, free
+python agent/run.py --provider gemini --timer 3 --minutes 60 --quiet  # real LLM
+python agent/run.py --provider mistral
+python agent/run.py --provider gemini --email                         # also send alert emails
+```
+
+**6. Keys and email.** Copy `agent/.env.example` to `agent/.env` and fill in what you need:
 
 ```
 GEMINI_API_KEY=...
 MISTRAL_API_KEY=...
-```
-
-```bash
-python agent/run.py --provider gemini --timer 3 --minutes 60
-python agent/run.py --provider mistral
-```
-
-**5. Send real alert emails.** Add these to `agent/.env`. For Gmail, turn on 2-step verification and create an app password (your normal password will not work):
-
-```
 EMAIL_SENDER=your_address@gmail.com
-EMAIL_PASSWORD=your_app_password
+EMAIL_PASSWORD=your16characterapppassword
 EMAIL_TO=person_to_alert@example.com
 ```
 
-```bash
-python agent/run.py --provider gemini --email
-```
-
-If email is on but the settings are missing, the agent warns you and saves the alerts as files only.
+For Gmail, turn on 2-Step Verification and create an app password (your normal password will not work). Write the app password **without spaces**. If email is on but a setting is missing, the agent warns you and saves the alerts as files only. Never commit `.env`.
 
 ### `run.py` options
 
@@ -175,7 +189,7 @@ If email is on but the settings are missing, the agent warns you and saves the a
 
 ### Settings (`agent/config.py`)
 
-All tuning is in this one file: replay start (70% point of the data), capacity per replica (computed so the average training load needs 5 replicas), timer, the three "unusual" thresholds, guardrail limits, alert rules, SMTP settings and LLM model names (`gemini-flash-latest`, `mistral-small-latest`). If your key rejects a model name, change it there.
+All tuning is in this one file: replay start (70% point of the data), capacity per replica (computed so the average training load needs 5 replicas), timer, the three "unusual" thresholds, guardrail limits, alert rules, SMTP settings and LLM settings. Gemini uses `GEMINI_MODEL` first and `GEMINI_FALLBACK_MODEL` automatically if the first one fails; busy-server errors (429/5xx) are retried `LLM_RETRIES` times first. Mistral uses `mistral-small-latest`. If your key rejects a model name, change it there; the full error text is printed as `LLM ERROR`.
 
 ---
 
@@ -219,13 +233,23 @@ Each `.pt` file holds the weights plus scaling values (`mu`, `sd`, `dsd`), `n_st
 | Item | State |
 |---|---|
 | Forecaster evaluation | Done in the notebook |
-| Agent graph, all 8 nodes, routing, guardrail, alert cooldown, CSV outputs, `run.py` options and Ctrl+C | Tested end to end on synthetic data with a stub forecaster |
-| Fake LLM, mocked Gemini and Mistral (fenced JSON, junk reply, blocked reply, timeout, no key), mocked SMTP (success, failure, missing settings) | Tested |
-| Agent with the **real LSTM and real dataset** | **Not run yet** |
-| **Real** Gemini and Mistral API calls | **Not run yet** |
-| **Real** email sending | **Not run yet** |
+| Agent graph, all 8 nodes, routing, guardrail, CSV outputs | `test/graph_tester.py`, real LSTM and real data, fake and Gemini LLM |
+| Real Gemini calls (decision and alert email text) | Working. A 134-minute replay is saved in `agent/data/` |
+| Real email through Gmail | A test email was sent with `mailer.send_email`. The forced alert inside `graph_tester.py --send-email` needs a re-run to confirm |
+| Mocked failure cases (junk reply, blocked reply, timeout, no key, SMTP failure) | Tested earlier on synthetic data with mocks |
+| Real **Mistral** calls | **Not run yet** |
+| LLM failure alert (2 failures in a row) | **Not working until `llm_failures` is added to `AgentState`** (see Limitations) |
+| Behaviour under a real traffic spike or an overloaded app | **Not tested** |
 
-The thresholds in `config.py` (30% spike, 95% capacity, 50% forecast error) are first guesses and need tuning after a real run.
+The thresholds in `config.py` (30% spike, 95% capacity, 50% forecast error) are first guesses and need tuning.
+
+### What the saved real run shows
+
+The 134-minute replay of `app_62` (minutes 14112 to 14245) with Gemini:
+
+- 40 logged decisions: 26 timer calls to the LLM and 14 changes made by the plain formula. No "unusual" event happened.
+- The LLM held the replicas 22 times and scaled up 4 times. It never scaled down. All 8 scale-downs and 6 of the 10 scale-ups came from the plain formula.
+- Replicas moved between 6 and 8, with 18 changes in 134 minutes. On this smooth app, the LLM mostly confirmed what the formula would do. Whether it adds value on harder traffic is not measured yet.
 
 ---
 
@@ -234,18 +258,24 @@ The thresholds in `config.py` (30% spike, 95% capacity, 50% forecast error) are 
 | Step | Status |
 |---|---|
 | Data exploration, baselines, GBM and LSTM forecasters | Done |
-| LangGraph agent: store, trigger, script, three branches, guardrail, logging, alert email | Written, synthetic-tested |
-| First real run (real model, real data, real LLM) and threshold tuning | Next |
-| Simulator with a 2-minute replica start-up delay, SLO-miss and replica-minute metrics | To do (`src/live_simulator.py` is empty) |
-| Compare policies: threshold rule, target tracking, forecast + schedule, forecast + agent | To do |
+| LangGraph agent: store, trigger, script, three branches, guardrail, logging, alert email | Done |
+| Real run: real model, real data, real Gemini, retries and fallback model | Done (one app, one replay) |
+| Test scripts for the LLM layer and the whole graph | Done |
+| Fix the `llm_failures` state bug, tune thresholds, try Mistral | Next |
+| Prometheus metrics and Grafana dashboard | To do |
 | Connect `set_replicas()` to Docker or Kubernetes | To do |
-| Dashboard, tests, demo video | To do |
+| Simulator with a 2-minute replica start-up delay, SLO-miss and replica-minute metrics | To do (`src/live_simulator.py` does not exist yet) |
+| Compare policies: threshold rule, target tracking, forecast + schedule, forecast + agent | To do |
+| Unit tests, CI, deployment, demo video | To do |
 
 ## Limitations
 
 - Only 6 of 318 apps have models. One seed, one split, 14 days of data.
 - `set_replicas()` is a placeholder. In the replay, new replicas count as instant, so the "minutes above capacity" number in the run summary is optimistic.
 - The agent is not yet compared against a rule-based controller. Its added value over plain rules is not measured. If a simulator shows it only matches the rules, that should be reported as is.
+- **Known bug:** `llm_failures` is written by `apply_and_log` but is not declared in `AgentState`. LangGraph silently drops undeclared keys, so the failure counter restarts every minute and the "LLM failed 2 times in a row" alert can never fire. Fix: add `llm_failures: int` to `AgentState` in `state.py`.
+- `nodes.py` contains the `force_alert` test check twice, and one comment mentions a `--test-alert` option that `run.py` does not have. `config.py` has `SMTP_PORT_STARTTLS`, but `mailer.py` does not use it yet. Clean these up.
+- Every minute the graph re-reads `predictions.csv` several times. This is fine for a replay but must change for a live loop.
 - **Design change from the first plan:** the early plan had the LLM only adjust one safety setting (headroom). In the current agent the LLM proposes a replica count, bounded by the guardrail. This is easier to explain but gives the LLM more influence, so the guardrail and the alert rules matter.
 - The replayed data is history, so scaling decisions cannot change user behavior.
 - This is a student portfolio project, not a production autoscaler.

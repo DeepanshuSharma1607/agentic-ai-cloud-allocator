@@ -9,7 +9,7 @@ Imagine a **restaurant**. Customers arrive every minute. You have some **cooks**
 
 Every minute, our program does this:
 
-1. **Predicts** how many customers will arrive 10 minutes from now. This is the *forecast*, made by a small AI model called an LSTM that your teammate already trained.
+1. **Predicts** how many customers will arrive 10 minutes from now. This is the *forecast*, made by a small AI model called an LSTM, trained in the notebook.
 2. **Writes** the prediction in a notebook (a CSV file).
 3. **Decides** if anything unusual is happening.
 4. **Decides** how many cooks we need. Usually a simple formula does this. Sometimes it asks an expert, the **LLM** (an AI like Gemini). The expert costs money, so we call it rarely.
@@ -41,7 +41,7 @@ You know Python. A **library** is code someone else wrote that you borrow with `
 | `email.message` | Builds an email: subject, body, attachments | mailer.py |
 | `langgraph` | Lets us draw a flow of steps (boxes and arrows) and run it | graph.py |
 | `argparse` | Lets you type options after the command, like `--minutes 120` | run.py |
-| `time` | Waiting and clocks | run.py |
+| `time` | Waiting and clocks. Also used to wait before a retry | run.py, llm.py |
 | `torch` | The AI library that runs the LSTM (used inside `predict.py`) | notebook/predict.py |
 
 ---
@@ -115,7 +115,7 @@ This builds the very first notebook. `-10 ** 9` is a huge negative number that m
 
 **Idea 1: three "AIs" behind one door.** `LLM_PROVIDER` in config picks one:
 - `fake`: a pretend AI that uses a formula. It is free and perfect for testing.
-- `gemini` and `mistral`: the real ones.
+- `gemini` and `mistral`: the real ones. Gemini has been run for real. Mistral has not yet.
 
 **Idea 2: the fake AI formula**
 
@@ -136,6 +136,21 @@ return r.json()["candidates"][0]["content"]["parts"][0]["text"]
 - `timeout` means "give up after 30 seconds".
 - `raise_for_status()` turns a server error into a Python error.
 - `r.json()` turns the reply into a dictionary. The long `["candidates"][0]...` chain is us digging down to the text.
+
+**Idea 3b: online AIs are sometimes busy.** A real AI server sometimes answers "503, I am busy". One busy answer is not a disaster, so `post_json` tries again:
+
+```python
+for attempt in range(cfg.LLM_RETRIES + 1):
+    r = requests.post(url, json=body, headers=headers, timeout=cfg.LLM_TIMEOUT)
+    if r.status_code not in RETRY_STATUS:
+        ...
+        return r.json()
+    time.sleep(cfg.LLM_RETRY_WAIT * (attempt + 1))
+```
+- `RETRY_STATUS = (429, 500, 502, 503, 504)` are the "busy, try again" answers.
+- It waits 2 seconds, then 4 seconds, between tries.
+- A **real** error, like a wrong key (401) or a wrong model name (404), is **not** retried. It is raised at once with the server's own text, so you can read the cause.
+- `call_gemini` also has a **fallback model**. If `GEMINI_MODEL` fails, it tries `GEMINI_FALLBACK_MODEL`. It is like calling a second expert when the first one does not pick up.
 
 **Idea 4: never trust the AI's answer.** AIs sometimes reply with extra words, wrong types or nonsense. `parse_reply` cleans it:
 
@@ -175,7 +190,9 @@ with smtplib.SMTP_SSL(cfg.SMTP_HOST, cfg.SMTP_PORT, timeout=...) as server:
 - **SMTP** is the language email servers speak. `SMTP_SSL` makes the connection secure.
 - `with ... as server:` opens the connection and **closes it automatically** when the block ends, even if there was an error.
 - `.encode("utf-8")` turns text into bytes, which attachments need.
-- The password must be a Gmail **app password**, a special password for programs.
+- The password must be a Gmail **app password**, a special password for programs. It is written in `.env` **without spaces**, even though Google shows it in four groups.
+
+`config.py` also has `SMTP_PORT_STARTTLS = 587`, meant as a second way to connect, but `mailer.py` does not use it yet. If your network blocks port 465 (some hostel Wi-Fi does), the email times out.
 
 The function returns a pair like `(True, "sent to ...")` or `(False, "reason")`. It never raises an error, because a broken email must not stop the autoscaler.
 
@@ -191,7 +208,7 @@ A **node** is just a function with one rule: it receives the `state` and returns
 - `reset_files()`: deletes old CSV files so every run starts clean.
 - `append_row(...)`: adds one row to a CSV with `csv.DictWriter`. It writes the header (column names) only if the file is new.
 - `read_predictions()`: `pd.read_csv(...)` loads the CSV into a pandas table.
-- `sys.path.append(...)`: Python only looks in certain folders for `import`. This line adds the `notebook` folder so `from predict import ...` can find your teammate's file.
+- `sys.path.append(...)`: Python only looks in certain folders for `import`. This line adds the `notebook` folder so `from predict import ...` can find `predict.py`.
 
 ### The `Feed` class
 
@@ -240,11 +257,22 @@ r = min(r, max(current + 2, int(current * 2.0)))
 r = max(r, current - max(1, int(current * 0.25)))
 ```
 Example up: 5 cooks now, the AI wants 20, max is 11. Step 1 gives 11. Step 2 allows at most `max(7, 10)` = 10, so the answer is **10**.
-Example down: 8 cooks now, the AI wants 1. Step 2 leaves 1. Step 3 allows at most `8 - max(1, 2)` = 6 cooks removed from 8, so the answer is **6**.
+Example down: 8 cooks now, the AI wants 1. Step 2 leaves 1. Step 3 says we may remove at most `max(1, 2)` = 2 cooks, so we cannot go below `8 - 2` = 6. The answer is **6**.
 
 `set_replicas()` is an empty placeholder. Later you connect Docker or Kubernetes there to really start and stop copies.
 
-This node also writes `actions.csv`, but skips the boring minutes (auto mode and no change). Then `alert_reason_for` decides if a human must be told: the AI asked for help, the AI failed, traffic was above capacity 5 minutes in a row, or we are at the maximum and still overloaded. A 30-minute cooldown prevents email spam.
+This node also writes `actions.csv`, but skips the boring minutes (auto mode and no change). Then `alert_reason_for` decides if a human must be told: the AI asked for help, the AI failed **twice in a row**, traffic was above capacity 5 minutes in a row, or we are at the maximum and still overloaded. A 30-minute cooldown prevents email spam.
+
+**Counting failures.** One failed AI call (a busy server) is not an emergency, so `apply_and_log` keeps a counter, `llm_failures`:
+- the AI call failed: counter + 1
+- the AI answered normally: counter back to 0
+- an `auto` minute (no AI call): the counter stays as it is
+
+When the counter reaches `LLM_FAILURES_BEFORE_ALERT` (2), a human gets an email.
+
+**A LangGraph trap.** The counter only works if `llm_failures` is **declared in `AgentState`** in `state.py`. LangGraph silently throws away any key that is not declared there. No error, the value just disappears, and the counter would restart from 0 every minute. If you ever add a new key in a node, add it to `state.py` too.
+
+**Test-only switch.** `force_alert` is a state key that makes `alert_reason_for` return an alert at once and ignore the cooldown. `test/graph_tester.py` uses it to prove that the alert path works. In real runs it is never set.
 
 ### Node 8: `alert_human`
 
@@ -309,12 +337,35 @@ for pos in range(feed.start_pos, end):
 
 | File | What it is |
 |---|---|
-| `requirements.txt` | A shopping list of libraries. `uv pip install -r requirements.txt` installs all of them. |
+| `requirements.txt` | A shopping list of libraries, in the project root. `pip install -r requirements.txt` (or `uv pip install -r requirements.txt`) installs all of them. |
 | `.env.example` | A template showing which secret settings exist. Copy it to `.env` and fill it in. |
 | `.env` | **You** create this. It holds your real keys and is never shared. |
-| `.gitignore` | Tells Git which files to never upload (`.env`, `data/`, `__pycache__/`). |
+| `.gitignore` | Tells Git which files to never upload (`.env`, `__pycache__/`). Add `agent/data/` too, because those CSV files are created again on every run. |
 | `README.md` | The instruction page for humans. |
-| `notebook/predict.py` | Not mine, your teammate's. It loads the LSTM with `torch`, and the agent uses 4 functions from it: `load_data`, `find_model`, `load_model`, `predict_at`. |
+| `notebook/predict.py` | Loads the LSTM with `torch`, and the agent uses 4 functions from it: `load_data`, `find_model`, `load_model`, `predict_at`. |
+
+---
+
+## 9. The tests: how you know it works
+
+A test is a small program that runs your code and says PASS or FAIL. They live in the `test/` folder.
+
+| File | What it checks | Command |
+|---|---|---|
+| `llm_tester.py` | Only `llm.py`. Test 1: does the AI give a sensible replica decision for an overloaded app? Test 2: does it write the alert email? Saves nothing, sends nothing. | `python test/llm_tester.py --provider gemini` |
+| `graph_tester.py` | The **whole graph** with the real LSTM and real data, for 12 minutes. It forces every branch to run and prints a PASS or FAIL for each check. | `python test/graph_tester.py --provider gemini` |
+
+**How `graph_tester.py` forces things to happen:**
+- Minute 2: it temporarily sets `NEAR_CAPACITY = 0.01`, so "near capacity" becomes true and the **unusual** mode runs.
+- The timer is set to 3 minutes, so the **timer** mode runs.
+- Minute 8: it sets `force_alert = True`, so `alert_human` runs.
+- It writes into `test/output/`, so your real `agent/data/` files stay untouched.
+
+**What the checks cover:** every node ran, the order of nodes is right, the three modes happened, `predictions.csv` and `actions.csv` have the right shape, the report for the AI is well formed, replicas carry over and obey the guardrail, every AI call succeeded, and the alert email was written (and sent, with `--send-email`).
+
+**Expected result:** 28 checks with `fake`, 29 with `gemini`, 30 with `gemini --send-email`, all `[PASS]`.
+
+**Reading a failure:** look at the `[FAIL]` line and the text after `->`. For an AI failure it shows the server's own error text. For the email it shows the SMTP error (usually a wrong app password).
 
 ---
 
@@ -338,7 +389,8 @@ Say we have **5 cooks**, each handling **200 customers/minute** (total 1000). No
 3. Why is the guardrail applied to the auto formula as well as the AI?
 4. In the guardrail, current is 4 and the AI proposes 30 (max 11). What is the final number?
 5. Why is the password stored in `.env` and not in `config.py`?
+6. Why does `post_json` retry a 503 but not a 401?
+7. You add `my_counter` to a node's return value but not to `state.py`. What happens?
+8. Why does the alert wait for 2 AI failures in a row instead of 1?
 
-*(Answers: 1. safety, doing nothing is safer than doing something random. 2. one always goes to the same box, the other chooses a road. 3. no decision should be able to break the limits. 4. min(11, max(6, 8)) = 8. 5. so secrets never get shared with the code.)*
-
-I can turn this into a PDF handout or a Word file for the students if you want.
+*(Answers: 1. safety, doing nothing is safer than doing something random. 2. one always goes to the same box, the other chooses a road. 3. no decision should be able to break the limits. 4. min(11, max(6, 8)) = 8. 5. so secrets never get shared with the code. 6. a 503 means "busy now" and may work next time, a 401 means the key is wrong and will fail every time. 7. LangGraph silently drops the key, so the value is lost with no error. 8. one busy-server error fixes itself, two in a row suggest a real problem.)*
