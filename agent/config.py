@@ -58,6 +58,7 @@ ALERT_LOG_MINUTES = 60    # the email carries the last hour of logs
 ALERT_SEND_EMAIL = False  # False = only save the email in data/alerts/. True = also send it by SMTP
 SMTP_HOST = "smtp.gmail.com"
 SMTP_PORT = 465           # SSL
+SMTP_PORT_STARTTLS = 587  # second way, tried automatically if the SSL connection fails
 EMAIL_TIMEOUT = 20        # seconds
 EMAIL_SENDER = os.getenv("EMAIL_SENDER", "")        # the address that sends the alert
 EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD", "")    # Gmail: an "app password", NOT your normal password
@@ -68,9 +69,13 @@ EMAIL_TO = os.getenv("EMAIL_TO", "")                # the human who gets the ale
 # "gemini"  = Google Gemini, needs env var GEMINI_API_KEY
 # "mistral" = Mistral Small, needs env var MISTRAL_API_KEY
 LLM_PROVIDER = "fake"
-GEMINI_MODEL = "gemini-flash-latest"
+GEMINI_MODEL = "gemini-3.5-flash-lite"       # first choice: light model, rarely overloaded
+GEMINI_FALLBACK_MODEL = "gemini-3.8-flash"   # used automatically if the first one fails. "" = no fallback
 MISTRAL_MODEL = "mistral-small-latest"
 LLM_TIMEOUT = 30          # seconds to wait for the LLM before giving up (the agent then holds)
+LLM_RETRIES = 2           # extra tries when the server is busy (503/429) or the connection drops
+LLM_RETRY_WAIT = 2        # seconds to wait before a retry (2 s, then 4 s)
+LLM_FAILURES_BEFORE_ALERT = 2   # email a human only after this many LLM failures IN A ROW (one 503 is not an emergency)
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 MISTRAL_API_KEY = os.getenv("MISTRAL_API_KEY", "")

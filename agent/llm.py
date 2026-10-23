@@ -17,6 +17,7 @@ Provider is chosen in config.py: "fake", "gemini" or "mistral".
 """
 import json
 import math
+import time
 
 import requests
 
@@ -72,16 +73,50 @@ def fake_llm(facts):
     return {"action": "fake", "replicas": need, "reason": f"fake LLM: demand {demand:.0f}/min needs {need} replicas"}
 
 
+# ---------------------------------------------------------------- sending a message to an online LLM
+RETRY_STATUS = (429, 500, 502, 503, 504)       # "busy / try again" answers from the server
+
+
+def post_json(url, body, headers):
+    """POST and return the reply as a dict. Temporary problems (busy server, dropped connection) are retried
+    a few times. Real errors (wrong key, wrong model name) are raised at once with the server's explanation."""
+    last = "unknown problem"
+    for attempt in range(cfg.LLM_RETRIES + 1):
+        try:
+            r = requests.post(url, json=body, headers=headers, timeout=cfg.LLM_TIMEOUT)
+            if r.status_code not in RETRY_STATUS:
+                if r.status_code >= 400:
+                    raise RuntimeError(f"HTTP {r.status_code}: {r.text[:200]}")
+                return r.json()
+            last = f"HTTP {r.status_code} (server busy)"
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
+            last = f"{type(e).__name__}: {e}"
+        if attempt < cfg.LLM_RETRIES:
+            time.sleep(cfg.LLM_RETRY_WAIT * (attempt + 1))
+    raise RuntimeError(f"still failing after {cfg.LLM_RETRIES + 1} tries, last problem: {last}")
+
+
 def call_gemini(system, user):
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{cfg.GEMINI_MODEL}:generateContent"
+    """Try the first model; if it fails (busy, unknown name ...), try the fallback model."""
+    models = [cfg.GEMINI_MODEL] + ([cfg.GEMINI_FALLBACK_MODEL] if cfg.GEMINI_FALLBACK_MODEL else [])
+    errors = []
+    for model in models:
+        try:
+            return call_gemini_model(model, system, user)
+        except Exception as e:
+            errors.append(f"{model}: {e}")
+    raise RuntimeError(" || ".join(errors))
+
+
+def call_gemini_model(model, system, user):
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
     body = {
         "systemInstruction": {"parts": [{"text": system}]},
         "contents": [{"role": "user", "parts": [{"text": user}]}],
         "generationConfig": {"temperature": 0, "responseMimeType": "application/json"},
     }
-    r = requests.post(url, json=body, headers={"x-goog-api-key": cfg.GEMINI_API_KEY}, timeout=cfg.LLM_TIMEOUT)
-    r.raise_for_status()
-    return r.json()["candidates"][0]["content"]["parts"][0]["text"]
+    data = post_json(url, body, {"x-goog-api-key": cfg.GEMINI_API_KEY})
+    return data["candidates"][0]["content"]["parts"][0]["text"]
 
 
 def call_mistral(system, user):
@@ -91,10 +126,8 @@ def call_mistral(system, user):
         "temperature": 0,
         "response_format": {"type": "json_object"},
     }
-    r = requests.post("https://api.mistral.ai/v1/chat/completions", json=body,
-                      headers={"Authorization": f"Bearer {cfg.MISTRAL_API_KEY}"}, timeout=cfg.LLM_TIMEOUT)
-    r.raise_for_status()
-    return r.json()["choices"][0]["message"]["content"]
+    data = post_json("https://api.mistral.ai/v1/chat/completions", body, {"Authorization": f"Bearer {cfg.MISTRAL_API_KEY}"})
+    return data["choices"][0]["message"]["content"]
 
 
 # ---------------------------------------------------------------- checking the reply

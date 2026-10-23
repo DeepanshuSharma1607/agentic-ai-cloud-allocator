@@ -25,7 +25,7 @@ import mailer
 
 # predict.py lives in the notebook folder. Appended at the END so our own config.py / llm.py always win.
 sys.path.append(str(cfg.NOTEBOOK_DIR))
-from notebook.predict import find_model, load_data, load_model, predict_at  # noqa: E402
+from predict import find_model, load_data, load_model, predict_at  # noqa: E402
 
 PRED_COLS = ["minute", "traffic_now", "forecast", "forecast_for", "replicas"]
 ACTION_COLS = ["minute", "mode", "reason", "traffic_now", "forecast", "replicas_before",
@@ -230,16 +230,20 @@ def set_replicas(n):
     pass
 
 
-def alert_reason_for(state, decision, applied):
+def alert_reason_for(state, decision, applied, failures):
     """Returns a sentence if a human must be told, else None. Plain code, no LLM."""
+    if state.get("force_alert"):
+        return "TEST ALERT: forced by graph_tester.py"
     minute = state["minute"]
+    if state.get("force_alert"):                                       # tests only (run.py --test-alert): ignores the cooldown
+        return "TEST ALERT (run.py --test-alert). Nothing is really wrong, this checks that alert emails work"
     if minute - state.get("last_alert_minute", -10 ** 9) < cfg.ALERT_COOLDOWN:
         return None                                                    # an alert was sent recently
 
     if decision.get("escalate"):
         return f"the LLM asks for a human: {decision['reason']}"
-    if decision.get("error"):
-        return f"the LLM call failed: {decision['reason']}"
+    if failures >= cfg.LLM_FAILURES_BEFORE_ALERT:                      # one failed call is not an emergency
+        return f"the LLM failed {failures} times in a row: {decision['reason']}"
 
     recent = read_predictions().tail(cfg.ALERT_MISS_MINUTES)
     if len(recent) == cfg.ALERT_MISS_MINUTES and (recent["traffic_now"] > recent["replicas"] * state["capacity"]).all():
@@ -264,8 +268,13 @@ def apply_and_log(state):
             "action": action, "decision_reason": decision["reason"],
         })
 
-    alert = alert_reason_for(state, decision, applied)
-    out = {"applied": applied, "replicas": applied, "alert_reason": alert or ""}
+    failures = state.get("llm_failures", 0)
+    if decision.get("error"):
+        failures += 1                                              # another LLM failure in a row
+    elif state["mode"] != cfg.MODE_AUTO:
+        failures = 0                                               # the LLM answered, start counting again
+    alert = alert_reason_for(state, decision, applied, failures)
+    out = {"applied": applied, "replicas": applied, "alert_reason": alert or "", "llm_failures": failures}
     if alert:
         out["last_alert_minute"] = state["minute"]                 # start the alert cooldown now
     return out

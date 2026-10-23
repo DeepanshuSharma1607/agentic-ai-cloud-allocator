@@ -101,6 +101,8 @@ def main():
             if not a.quiet or mode != cfg.MODE_AUTO or after != before or alert:
                 print(f"minute {state['minute']} | traffic {state['traffic_now']:>8.0f} | forecast {state['forecast']:>8.0f} | "
                       f"replicas {before:>3} -> {after:<3} | {mode:<7} | {state['decision']['reason'][:70]}")
+            if state["decision"].get("error"):
+                print(f"    LLM ERROR (full text): {state['decision']['reason']}")
             if alert:
                 print(f"    ALERT: {alert}\n    -> {state['alert_status']}")
             if tick > 0:

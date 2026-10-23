@@ -42,7 +42,7 @@ class AgentState(TypedDict, total=False):
 
     # ---- alert_human ----
     alert_status: str           # what happened to the urgent email (sent / saved only / failed)
-
+    force_alert: bool           # test only: used by test/graph_tester.py
 
 def new_state(capacity, max_replicas, replicas, start_minute):
     """The starting state, created once by run.py before the first minute."""

@@ -1,0 +1,41 @@
+minute,mode,reason,traffic_now,forecast,replicas_before,proposed,applied,action,decision_reason
+14117,timer,timer: 5 minutes since the last check,1118.0,1135.4,6,6,6,hold,"Current traffic of 1118 requires 6 replicas to maintain 10% spare capacity, but forecasts for the next minutes reach up to 1165 which exceeds current capacity."
+14120,auto,nothing unusual and the timer is not due,1180.0,1240.1,6,7,7,scale_up,"auto: highest demand in the last 9 min is 1240/min, needs 7 replicas"
+14122,timer,timer: 5 minutes since the last check,1135.0,1169.4,7,7,7,hold,Current replica count of 7 provides sufficient capacity for the predicted demand with adequate spare room.
+14127,timer,timer: 5 minutes since the last check,1133.0,1156.0,7,7,7,hold,Current replica count provides sufficient capacity with adequate headroom for the forecasted demand.
+14132,timer,timer: 5 minutes since the last check,1186.0,1149.4,7,7,7,hold,Current capacity with 7 replicas handles the demand with adequate spare room.
+14137,timer,timer: 5 minutes since the last check,1191.0,1195.0,7,7,7,hold,Current replicas of 7 provide sufficient capacity for the forecasted demand of around 1195 requests per minute with adequate headroom.
+14140,auto,nothing unusual and the timer is not due,1157.0,1144.9,7,6,6,scale_down,"auto: highest demand in the last 10 min is 1207/min, needs 6 replicas"
+14142,timer,timer: 5 minutes since the last check,1133.0,1155.6,6,7,7,scale_up,"Current traffic of 1133/min requires 6 replicas leaving no spare room, so increasing to 7 to maintain 10% headroom."
+14143,auto,nothing unusual and the timer is not due,1149.0,1149.1,7,6,6,scale_down,"auto: highest demand in the last 10 min is 1207/min, needs 6 replicas"
+14147,timer,timer: 5 minutes since the last check,1179.0,1103.0,6,6,6,hold,Current traffic of 1179 req/min with 6 replicas provides sufficient capacity with adequate spare room.
+14149,auto,nothing unusual and the timer is not due,1171.0,1255.2,6,7,7,scale_up,"auto: highest demand in the last 10 min is 1255/min, needs 7 replicas"
+14152,timer,timer: 5 minutes since the last check,1155.0,1147.2,7,7,7,hold,Current replicas are well aligned with actual demand and a 10% safety margin.
+14157,timer,timer: 5 minutes since the last check,1118.0,1140.1,7,7,7,hold,Current replicas adequately handle the traffic with appropriate spare capacity.
+14162,timer,timer: 5 minutes since the last check,1131.0,1131.3,7,7,7,hold,Current replicas adequately handle the traffic with appropriate spare room.
+14167,timer,timer: 5 minutes since the last check,1113.0,1143.9,7,7,7,hold,Current replica count provides sufficient capacity with adequate spare room for the predicted demand.
+14170,auto,nothing unusual and the timer is not due,1156.0,1143.8,7,6,6,scale_down,"auto: highest demand in the last 10 min is 1169/min, needs 6 replicas"
+14172,timer,timer: 5 minutes since the last check,1110.0,1167.1,6,7,7,scale_up,"Upcoming forecast demands 1167 req/min, requiring 7 replicas to maintain 10% spare room."
+14173,auto,nothing unusual and the timer is not due,1135.0,1143.1,7,6,6,scale_down,"auto: highest demand in the last 10 min is 1169/min, needs 6 replicas"
+14175,auto,nothing unusual and the timer is not due,1235.0,1170.4,6,7,7,scale_up,"auto: highest demand in the last 10 min is 1235/min, needs 7 replicas"
+14177,timer,timer: 5 minutes since the last check,1200.0,1149.7,7,7,7,hold,Current 7 replicas provide sufficient capacity with spare room for the forecasted demand of 1150.
+14182,timer,timer: 5 minutes since the last check,1184.0,1185.6,7,7,7,hold,Current traffic and forecast are well within the capacity of 7 replicas with appropriate spare room.
+14187,timer,timer: 5 minutes since the last check,1159.0,1160.3,7,7,7,hold,Current traffic and forecasts are stable with adequate capacity and 10% spare room.
+14192,timer,timer: 5 minutes since the last check,1169.0,1141.4,7,7,7,hold,Current replicas adequately handle the traffic with sufficient spare capacity.
+14197,timer,timer: 5 minutes since the last check,1150.0,1172.8,7,7,7,hold,Current capacity with 7 replicas handles the demand with adequate spare room.
+14200,auto,nothing unusual and the timer is not due,1148.0,1150.2,7,6,6,scale_down,"auto: highest demand in the last 10 min is 1196/min, needs 6 replicas"
+14202,timer,timer: 5 minutes since the last check,1173.0,1139.1,6,7,7,scale_up,Traffic of 1173 with capacity 223 per replica requires 7 replicas to maintain proper headroom.
+14203,auto,nothing unusual and the timer is not due,1149.0,1150.6,7,6,6,scale_down,"auto: highest demand in the last 10 min is 1196/min, needs 6 replicas"
+14207,timer,timer: 5 minutes since the last check,1180.0,1140.9,6,7,7,scale_up,"Traffic of 1180 requires 6 replicas with less than 10% spare capacity, so 7 replicas are needed."
+14208,auto,nothing unusual and the timer is not due,1146.0,1111.2,7,6,6,scale_down,"auto: highest demand in the last 10 min is 1218/min, needs 6 replicas"
+14209,auto,nothing unusual and the timer is not due,1159.0,1272.0,6,7,7,scale_up,"auto: highest demand in the last 10 min is 1272/min, needs 7 replicas"
+14212,timer,timer: 5 minutes since the last check,1155.0,1156.2,7,7,7,hold,Current replicas adequately handle actual and forecasted traffic with appropriate spare room.
+14217,timer,timer: 5 minutes since the last check,1129.0,1123.7,7,7,7,hold,"Current traffic and forecast are stable around 1130 req/min, which is well within the capacity of 7 replicas."
+14220,auto,nothing unusual and the timer is not due,1444.0,1176.1,7,8,8,scale_up,"auto: highest demand in the last 10 min is 1444/min, needs 8 replicas"
+14222,timer,timer: 5 minutes since the last check,1151.0,1124.5,8,8,8,hold,Current traffic has dropped back to normal levels and 8 replicas provide sufficient capacity with spare room.
+14227,timer,timer: 5 minutes since the last check,1137.0,1175.7,8,8,8,hold,Current replica count of 8 provides adequate capacity for the predicted traffic with appropriate spare room.
+14230,auto,nothing unusual and the timer is not due,1123.0,1162.9,8,6,6,scale_down,"auto: highest demand in the last 10 min is 1180/min, needs 6 replicas"
+14232,timer,timer: 5 minutes since the last check,1129.0,1173.2,6,6,6,hold,Current traffic of 1129/min and upcoming forecast of 1173/min require 6 replicas plus 10% spare room.
+14235,auto,nothing unusual and the timer is not due,1235.0,1177.8,6,7,7,scale_up,"auto: highest demand in the last 10 min is 1235/min, needs 7 replicas"
+14237,timer,timer: 5 minutes since the last check,1185.0,1156.0,7,7,7,hold,Current replicas of 7 provide sufficient capacity for the expected demand with adequate headroom.
+14242,timer,timer: 5 minutes since the last check,1182.0,1171.9,7,7,7,hold,"Current traffic and future forecasts are stable, and 7 replicas provide adequate capacity with spare room."
