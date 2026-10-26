@@ -1,6 +1,8 @@
 .venv/
 .env
+agent/.env
 __pycache__/
 *.pyc
 llm_talks/
-agent/ .env
+agent/data/
+test/output/

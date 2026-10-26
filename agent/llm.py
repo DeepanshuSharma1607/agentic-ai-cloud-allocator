@@ -37,6 +37,9 @@ Rules:
 - Set "escalate" to true ONLY when scaling cannot fix the problem and a human must look: for example already at
   max_replicas and still overloaded, traffic that looks like an attack or a bug, or forecasts that are completely unreliable.
   Otherwise set it to false.
+- If the current replicas are enough for the demand, "escalate" must be false.
+- formula_replicas is the answer of the plain formula. Stay with formula_replicas unless the report shows a clear reason, and name that reason.
+- "reason" is ONE short sentence. Do not show calculations and do not think out loud.
 Reply with ONE JSON object and nothing else:
 {"action": "scale_up" or "scale_down" or "hold", "replicas": <integer, the new total>, "reason": "<one short sentence>", "escalate": true or false}"""
 
@@ -60,7 +63,9 @@ def build_prompt(script, mode, reason, facts):
         f"capacity_per_replica: {facts['capacity']:.0f}\n"
         f"min_replicas: {facts['min_replicas']}\n"
         f"max_replicas: {facts['max_replicas']}\n"
-        f"highest_demand_last_minutes: {facts.get('recent_peak', facts['traffic_now']):.0f}\n\n"
+        f"highest_demand_last_minutes: {facts.get('recent_peak', facts['traffic_now']):.0f}\n"
+        + (f"formula_replicas: {facts['formula_replicas']}\n" if "formula_replicas" in facts else "")
+        + "\n"
         f"Report of the last minutes:\n{script}"
     )
 

@@ -24,9 +24,16 @@ def send_email(subject, body, attachments=()):
         msg.set_content(body)
         for name, text in attachments:
             msg.add_attachment(text.encode("utf-8"), maintype="text", subtype="csv", filename=name)
-        with smtplib.SMTP_SSL(cfg.SMTP_HOST, cfg.SMTP_PORT, timeout=cfg.EMAIL_TIMEOUT) as server:
-            server.login(cfg.EMAIL_SENDER, cfg.EMAIL_PASSWORD)
-            server.send_message(msg)
+        try:
+            with smtplib.SMTP_SSL(cfg.SMTP_HOST, cfg.SMTP_PORT, timeout=cfg.EMAIL_TIMEOUT) as server:
+                server.login(cfg.EMAIL_SENDER, cfg.EMAIL_PASSWORD)
+                server.send_message(msg)
+        except (OSError, smtplib.SMTPConnectError):          # port 465 blocked: try STARTTLS on 587
+            # (a wrong password raises SMTPAuthenticationError, which is not caught here, so it is still reported clearly)
+            with smtplib.SMTP(cfg.SMTP_HOST, cfg.SMTP_PORT_STARTTLS, timeout=cfg.EMAIL_TIMEOUT) as server:
+                server.starttls()
+                server.login(cfg.EMAIL_SENDER, cfg.EMAIL_PASSWORD)
+                server.send_message(msg)
         return True, f"sent to {cfg.EMAIL_TO}"
     except Exception as e:
         return False, f"email failed: {e}"

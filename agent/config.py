@@ -53,8 +53,9 @@ MAX_DOWN_FRACTION = 0.25      # at most remove 25% of the replicas in one decisi
 # An alert fires when: the LLM asks for a human, the LLM call fails, traffic is above capacity
 # ALERT_MISS_MINUTES minutes in a row, or we are at max replicas and still overloaded.
 ALERT_COOLDOWN = 30       # minutes between two alerts (stops email spam)
-ALERT_MISS_MINUTES = 5    # "overloaded for this many minutes in a row"
+ALERT_MISS_MINUTES = 2    # "overloaded for this many minutes in a row"
 ALERT_LOG_MINUTES = 60    # the email carries the last hour of logs
+ESCALATE_MIN_LOAD = 0.9   # an LLM "escalate" only becomes an alert if max(traffic, forecast) is above 90% of capacity (first guess, tune it)
 ALERT_SEND_EMAIL = False  # False = only save the email in data/alerts/. True = also send it by SMTP
 SMTP_HOST = "smtp.gmail.com"
 SMTP_PORT = 465           # SSL

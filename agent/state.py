@@ -19,6 +19,8 @@ class AgentState(TypedDict, total=False):
     last_timer_minute: int      # minute when the timer LLM check last ran
     last_unusual_minute: int    # minute when the unusual LLM call last ran
     last_alert_minute: int      # minute when the last urgent email was triggered
+    llm_failures: int           # LLM failures in a row (alert after LLM_FAILURES_BEFORE_ALERT)
+    last_scale_up_minute: int   # minute of the last scale-up (auto_scale will not scale down for DOWN_WAIT minutes after it)
 
     # ---- node 1: store_prediction ----
     pos: int                    # position of "now" in the dataset

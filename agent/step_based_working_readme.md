@@ -81,7 +81,7 @@ Every node receives the state dictionary and returns **only the keys it changes*
 - **Carried keys**, kept by `run.py` from one minute to the next: `replicas`, `capacity`, `max_replicas`, `last_timer_minute`, `last_unusual_minute`, `last_alert_minute`, `llm_failures`.
 - **Per-minute keys**, filled again every minute: `pos`, `minute`, `traffic_now`, `forecast`, `mode`, `reason`, `script`, `decision`, `applied`, `alert_reason`, `alert_status`.
 
-> **Important rule:** every key a node returns must be declared in `AgentState` (`state.py`). LangGraph silently drops undeclared keys. If you add a new key to a node and forget `state.py`, nothing fails, but the value is lost. **Check that `llm_failures: int` is declared**, otherwise the "2 failures in a row" alert never fires.
+> **Important rule:** every key a node returns must be declared in `AgentState` (`state.py`). LangGraph silently drops undeclared keys. If you add a new key to a node and forget `state.py`, nothing fails, but the value is lost. `llm_failures` and `last_scale_up_minute` are now declared.
 
 ## Folder
 
@@ -154,8 +154,6 @@ Everything is in `config.py`: timer, thresholds for "unusual", guardrail limits,
 
 ## Known issues
 
-- `llm_failures` must be declared in `AgentState` (see the important rule above).
-- `nodes.py` has the `force_alert` check twice in `alert_reason_for`. Keep one. A comment mentions `run.py --test-alert`, which does not exist.
-- `config.py` has `SMTP_PORT_STARTTLS = 587` ("tried automatically if SSL fails"), but `mailer.py` only uses SSL on 465. Either add the fallback or remove the line. On a network that blocks port 465 (some hostel Wi-Fi), the email will time out.
-- The graph reads `predictions.csv` several times per minute. Fine for a replay, too slow and fragile for a live loop.
+- The graph reads `predictions.csv` several times per minute. Fine for a replay, too slow and fragile for a live loop (fix 12).
 - The Mistral provider has not been run against the real API yet.
+- `ESCALATE_MIN_LOAD = 0.9` in `config.py` is a first guess. It also blocks a legitimate "forecasts are unreliable at low load" escalation.

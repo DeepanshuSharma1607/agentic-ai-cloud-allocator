@@ -195,7 +195,8 @@ def _facts(state):
     peak = float(np.maximum(recent["traffic_now"], recent["forecast"]).max())     # highest demand in the last minutes
     return {"traffic_now": state["traffic_now"], "forecast": state["forecast"], "replicas": state["replicas"],
             "capacity": state["capacity"], "min_replicas": cfg.MIN_REPLICAS, "max_replicas": state["max_replicas"],
-            "recent_peak": peak}
+            "recent_peak": peak,
+            "formula_replicas": replicas_for(peak, state["capacity"], cfg.MIN_REPLICAS, state["max_replicas"])}
 
 
 def llm_unusual(state):
@@ -211,6 +212,8 @@ def auto_scale(state):
     demand = float(np.maximum(recent["traffic_now"], recent["forecast"]).max())
     need = replicas_for(demand, state["capacity"], cfg.MIN_REPLICAS, state["max_replicas"])
     current = state["replicas"]
+    if state["minute"] - state.get("last_scale_up_minute", -10 ** 9) < cfg.DOWN_WAIT:
+        need = max(need, current)                                      # just scaled up: do not undo it (stops flapping)
     action = "scale_up" if need > current else "scale_down" if need < current else "hold"
     return {"decision": {"action": action, "replicas": need,
                          "reason": f"auto: highest demand in the last {len(recent)} min is {demand:.0f}/min, needs {need} replicas"}}
@@ -232,16 +235,16 @@ def set_replicas(n):
 
 def alert_reason_for(state, decision, applied, failures):
     """Returns a sentence if a human must be told, else None. Plain code, no LLM."""
-    if state.get("force_alert"):
+    if state.get("force_alert"):                                       # tests only: used by test/graph_tester.py, ignores the cooldown
         return "TEST ALERT: forced by graph_tester.py"
     minute = state["minute"]
-    if state.get("force_alert"):                                       # tests only (run.py --test-alert): ignores the cooldown
-        return "TEST ALERT (run.py --test-alert). Nothing is really wrong, this checks that alert emails work"
     if minute - state.get("last_alert_minute", -10 ** 9) < cfg.ALERT_COOLDOWN:
         return None                                                    # an alert was sent recently
 
-    if decision.get("escalate"):
-        return f"the LLM asks for a human: {decision['reason']}"
+    if decision.get("escalate"):                                       # the LLM may only wake a human when plain code also sees high load
+        load = max(state["traffic_now"], state["forecast"]) / max(applied * state["capacity"], 1e-9)
+        if load > cfg.ESCALATE_MIN_LOAD:
+            return f"the LLM asks for a human: {decision['reason']}"
     if failures >= cfg.LLM_FAILURES_BEFORE_ALERT:                      # one failed call is not an emergency
         return f"the LLM failed {failures} times in a row: {decision['reason']}"
 
@@ -277,6 +280,8 @@ def apply_and_log(state):
     out = {"applied": applied, "replicas": applied, "alert_reason": alert or "", "llm_failures": failures}
     if alert:
         out["last_alert_minute"] = state["minute"]                 # start the alert cooldown now
+    if applied > before:
+        out["last_scale_up_minute"] = state["minute"]              # auto_scale will not scale down for DOWN_WAIT minutes
     return out
 
 

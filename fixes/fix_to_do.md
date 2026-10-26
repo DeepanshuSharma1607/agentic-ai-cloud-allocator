@@ -7,7 +7,9 @@ Tick each box when done and re-run the check shown next to it.
 
 ## P1: fix first (they affect correctness)
 
-### [ ] 1. Declare `llm_failures` in `agent/state.py`
+Status: items 1 to 7 are done in code. Re-run the Check line of each with your own keys to confirm.
+
+### [x] 1. Declare `llm_failures` in `agent/state.py`
 **Problem:** `apply_and_log` returns `llm_failures`, but it is not a key of `AgentState`. LangGraph silently drops undeclared keys (I tested this), so the counter restarts every minute and the alert "LLM failed 2 times in a row" can never fire.
 **Fix:** add inside `AgentState`:
 ```python
@@ -15,7 +17,7 @@ Tick each box when done and re-run the check shown next to it.
 ```
 **Check:** run `python test/graph_tester.py --provider gemini`, then temporarily set a wrong `GEMINI_API_KEY`. After 2 timer calls you should see an alert reason that starts with "the LLM failed 2 times in a row".
 
-### [ ] 2. Stop false escalations
+### [x] 2. Stop false escalations
 **Problem:** in run 7, Gemini set `escalate: true` at minute 14130 while its reason said replicas were sufficient (82% utilisation). In run 4 an unplanned alert also appeared at minute 14117.
 **Fix A, prompt** (`SYSTEM_PROMPT` in `agent/llm.py`), add to the rules:
 ```
@@ -31,7 +33,7 @@ Tick each box when done and re-run the check shown next to it.
 The 0.9 is a first guess. Note this also blocks a legitimate "forecasts are completely unreliable at low load" escalation. Decide if you want a second condition for a high forecast error.
 **Check:** repeat `python agent/run.py --provider gemini --timer 3 --minutes 60 --quiet` three times. Expect no alert at low load.
 
-### [ ] 3. Stop flapping (LLM and `auto_scale` undoing each other)
+### [x] 3. Stop flapping (LLM and `auto_scale` undoing each other)
 **Problem:** minute 14145 Gemini 6 -> 7, minute 14146 `auto_scale` 7 -> 6.
 **Fix:** after any scale-up, do not let `auto_scale` scale down for `DOWN_WAIT` minutes.
 1. `state.py`, add the key (undeclared keys get dropped, see fix 1):
@@ -50,7 +52,7 @@ The 0.9 is a first guess. Note this also blocks a legitimate "forecasts are comp
 ```
 **Check:** in the fake and Gemini runs there must be no `N -> N+1` followed by `N+1 -> N` within 10 minutes.
 
-### [ ] 4. Make the LLM's reason clean and correct
+### [x] 4. Make the LLM's reason clean and correct
 **Problem:** reasons with wrong arithmetic (minute 14115) and "Wait, let's calculate:" (minute 14118).
 **Fix A, prompt**, add to the rules:
 ```
@@ -59,7 +61,7 @@ The 0.9 is a first guess. Note this also blocks a legitimate "forecasts are comp
 **Fix B, give it the answer.** Compute the plain formula result and pass it in the prompt as `formula_replicas`, with the rule: "Stay with formula_replicas unless the report shows a clear reason, and name that reason." This removes most of the arithmetic the small model gets wrong. See also fix 9.
 **Check:** the reasons in `actions.csv` are one sentence each, with numbers that match the report.
 
-### [ ] 5. Clean up `agent/nodes.py`
+### [x] 5. Clean up `agent/nodes.py`
 **Problem:** `alert_reason_for` contains the `force_alert` check twice, and the comment mentions `run.py --test-alert`, which does not exist.
 **Fix:** keep one copy:
 ```python
@@ -68,7 +70,7 @@ The 0.9 is a first guess. Note this also blocks a legitimate "forecasts are comp
 ```
 **Check:** `python test/graph_tester.py` still shows 28 passed.
 
-### [ ] 6. Mailer: use the second port or remove the setting
+### [x] 6. Mailer: use the second port or remove the setting
 **Problem:** `config.py` has `SMTP_PORT_STARTTLS = 587` ("tried automatically"), but `mailer.py` only uses SSL on 465. Hostel Wi-Fi may block 465.
 **Fix:** in `mailer.py`, replace the `with smtplib.SMTP_SSL(...)` block with:
 ```python
@@ -85,7 +87,7 @@ The 0.9 is a first guess. Note this also blocks a legitimate "forecasts are comp
 Do not catch login errors here, so a wrong password is still reported clearly.
 **Check:** `python test/graph_tester.py --provider gemini --send-email` still sends the email.
 
-### [ ] 7. `.gitignore`
+### [x] 7. `.gitignore`
 **Problem:** the zip contains `agent/data/*.csv` (created on every run), and the root `.gitignore` has a broken line `agent/ .env`.
 **Fix:** replace the root `.gitignore` with:
 ```
