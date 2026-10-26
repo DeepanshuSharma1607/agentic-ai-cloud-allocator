@@ -39,6 +39,10 @@ def parse_args():
     p.add_argument("--provider", choices=llm.PROVIDERS, help="fake, gemini or mistral (default: LLM_PROVIDER in config.py)")
     p.add_argument("--email", action="store_true", help="really send alert emails")
     p.add_argument("--quiet", action="store_true", help="print only minutes with an LLM call, a replica change or an alert")
+    p.add_argument("--metrics-port", type=positive_int, default=8000, help="Prometheus exporter port (default: 8000)")
+    p.add_argument("--no-metrics", action="store_true", help="disable the Prometheus metrics endpoint")
+    p.add_argument("--test-alert", action="store_true", help="force exactly one test alert on the first replay minute")
+    p.add_argument("--serve-after-replay", action="store_true", help="keep the metrics endpoint alive after replay ends; Ctrl+C stops it")
     return p.parse_args()
 
 
@@ -76,6 +80,20 @@ def main():
     feed = nodes.Feed()
     app = graph.build_graph(feed)
     state = new_state(feed.capacity, feed.max_replicas, feed.start_replicas, feed.start_minute)
+
+    exporter = None
+    if not a.no_metrics:
+        from metrics import AllocatorMetrics
+        exporter = AllocatorMetrics(cfg.APP, cfg.LLM_PROVIDER)
+        exporter.set_initial(state)
+        exporter.start(a.metrics_port)
+        print(f"Prometheus metrics: http://localhost:{a.metrics_port}/metrics")
+
+    if a.test_alert:
+        print("TEST ALERT enabled: the first replay minute will create one test alert.")
+        if not cfg.ALERT_SEND_EMAIL:
+            print("Email sending is OFF. The alert will be saved to agent/data/alerts/ only; add --email to send it.")
+
     end = feed.n if a.minutes is None else min(feed.n, feed.start_pos + a.minutes)
 
     print(f"App {cfg.APP} | LLM: {cfg.LLM_PROVIDER} | timer every {cfg.TIMER_EVERY} min | "
@@ -84,19 +102,29 @@ def main():
     print(f"Replaying {end - feed.start_pos} minutes. Press Ctrl+C to stop.\n")
 
     stats = {"minutes": 0, "llm_calls": 0, "scale_events": 0, "alerts": 0, "over_capacity": 0, "replica_minutes": 0}
+    interrupted = False
     try:
         for pos in range(feed.start_pos, end):
             before = state["replicas"]
             state["pos"] = pos
+            # The test switch is true for the first replay minute only. It uses the
+            # existing alert_human node and does not change the normal alert rules.
+            state["force_alert"] = bool(a.test_alert and pos == feed.start_pos)
+
+            graph_started = time.perf_counter()
             state = app.invoke(state)                       # one full pass through the graph = one minute
+            graph_duration = time.perf_counter() - graph_started
 
             after, mode, alert = state["applied"], state["mode"], state["alert_reason"]
+            over_capacity_before = state["traffic_now"] > before * state["capacity"]
+            if exporter is not None:
+                exporter.record_tick(state, before, graph_duration, over_capacity_before)
             stats["minutes"] += 1
             stats["replica_minutes"] += before
             stats["llm_calls"] += mode in (cfg.MODE_UNUSUAL, cfg.MODE_TIMER)
             stats["scale_events"] += after != before
             stats["alerts"] += bool(alert)
-            stats["over_capacity"] += state["traffic_now"] > before * state["capacity"]
+            stats["over_capacity"] += over_capacity_before
 
             if not a.quiet or mode != cfg.MODE_AUTO or after != before or alert:
                 print(f"minute {state['minute']} | traffic {state['traffic_now']:>8.0f} | forecast {state['forecast']:>8.0f} | "
@@ -108,6 +136,7 @@ def main():
             if tick > 0:
                 time.sleep(tick)
     except KeyboardInterrupt:
+        interrupted = True
         print("\nStopped with Ctrl+C.")
 
     print("\n===== summary =====")
@@ -118,6 +147,15 @@ def main():
     print(f"replica-minutes (cost)  : {stats['replica_minutes']}")
     print(f"minutes above capacity  : {stats['over_capacity']}  (new replicas are assumed to start instantly)")
     print(f"files                   : {cfg.DATA_DIR}")
+
+    if a.serve_after_replay and exporter is not None and not interrupted:
+        print(f"\nReplay finished. Metrics endpoint remains available at http://localhost:{a.metrics_port}/metrics")
+        print("Prometheus/Grafana can continue scraping the final values. Press Ctrl+C to stop the exporter.")
+        try:
+            while True:
+                time.sleep(1)
+        except KeyboardInterrupt:
+            print("\nMetrics exporter stopped.")
 
 
 if __name__ == "__main__":

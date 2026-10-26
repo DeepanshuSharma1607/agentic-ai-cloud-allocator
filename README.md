@@ -1,30 +1,50 @@
-# AegisCloud
+# AegisCloud — Agentic AI Cloud Resource Allocator
 
-**An agentic autoscaler for containerized apps.** An LSTM forecasts traffic 10 minutes ahead. A LangGraph agent runs once per minute, stores the forecast, builds a short report, and decides how many replicas to run. Plain code handles most minutes. An LLM is called only on a timer or when something unusual happens. When something is really wrong, the LLM writes an urgent email to a human with the last hour of logs.
+AegisCloud is a student research and engineering project that combines **LSTM traffic forecasting, a LangGraph decision workflow, guarded scaling decisions, alert emails, and Prometheus/Grafana observability**. It replays historical Azure Functions traffic and evaluates what the allocator would decide minute by minute.
 
-> **Status (24 Oct 2026):** the forecaster is built and evaluated. The LangGraph agent now runs end to end with the **real LSTM, the real dataset and the real Gemini API** (a 134-minute replay is saved in `agent/data/`). Alert emails can be sent through Gmail. The agent is **not** yet compared with a rule-based autoscaler, the simulator and dashboard are **not built yet**, and `set_replicas()` is still a placeholder. See [Roadmap](#roadmap).
-
----
-
-## Why this project
-
-Rule-based autoscalers (CPU above 70%, target tracking) react after traffic has already grown. A new replica takes about 2 minutes to start, so acting early matters. They also cannot explain what is happening, stop a runaway scale-up caused by a bug, or ask a human for help.
-
-AegisCloud splits the work:
-
-| Part | Job | LLM? |
-|---|---|---|
-| Forecaster (LSTM) | Predicts traffic 10 minutes ahead | No |
-| `auto_scale` | Plain formula, runs on most minutes | No |
-| LLM governor (`llm_timer`, `llm_unusual`) | Reads a report of the last 10 minutes, checks the situation, fixes the replica count | Yes, rarely |
-| Guardrail | Limits every decision, whoever made it | No |
-| `alert_human` | LLM writes an urgent email with the last hour of logs | Yes, only when something is wrong |
-
-The LLM is never called per request and never on every minute.
+> **Current status — 26 October 2026:** the historical replay workflow, saved LSTM models, fake/real-provider integration, email-alert path, and local Prometheus/Grafana monitoring are implemented. The monitoring stack reports replay values plus real CPU/RAM measurements for the Python process and its host machine. **Replica counts are still simulated:** `set_replicas()` is a placeholder, and this project does not yet create or remove real Docker containers or Kubernetes Pods. A completed live-scaling adapter, startup-delay simulator, and policy-comparison evaluation remain future work.
 
 ---
 
-## How the agent works
+## Contents
+
+- [Project goals](#project-goals)
+- [Architecture](#architecture)
+- [What is implemented](#what-is-implemented)
+- [Repository layout](#repository-layout)
+- [Requirements](#requirements)
+- [Installation](#installation)
+- [Configuration and secrets](#configuration-and-secrets)
+- [Run the forecasting model](#run-the-forecasting-model)
+- [Run and test the agent](#run-and-test-the-agent)
+- [Prometheus and Grafana monitoring](#prometheus-and-grafana-monitoring)
+- [Metrics reference](#metrics-reference)
+- [Email alerts](#email-alerts)
+- [Forecasting experiment and results](#forecasting-experiment-and-results)
+- [Testing checklist](#testing-checklist)
+- [Known limitations](#known-limitations)
+- [Roadmap](#roadmap)
+- [Security notes](#security-notes)
+- [License](#license)
+
+---
+
+## Project goals
+
+Traditional autoscalers commonly react to current CPU or request load. A forecast can provide earlier warning of an upcoming demand increase, while a controller and guardrails can constrain the resulting scaling decisions. AegisCloud explores this workflow with:
+
+1. An **LSTM forecaster** that predicts request volume 10 minutes ahead.
+2. A **rule-based controller** that handles ordinary minutes without an LLM call.
+3. **LangGraph orchestration** that invokes an LLM for periodic reviews or unusual conditions.
+4. A **guardrail** that bounds every proposed replica count.
+5. **Alert generation and optional SMTP email** for situations that may require a human.
+6. **Prometheus and Grafana** for observing replay behavior, agent performance, alert outcomes, and local process/host resources.
+
+This project is currently a **replay-based prototype**, not a production autoscaler. The LLM is not called for every HTTP request or every replay minute.
+
+## Architecture
+
+### Decision workflow
 
 ```mermaid
 flowchart TD
@@ -32,254 +52,477 @@ flowchart TD
     B --> C[script_creator]
     C -->|unusual| D[llm_unusual]
     C -->|timer| E[llm_timer]
-    C -->|auto| F[auto_scale]
+    C -->|ordinary minute| F[auto_scale]
     D --> G[apply_and_log]
     E --> G
     F --> G
-    G -->|problem found| H[alert_human]
-    G -->|all fine| I((end of minute))
+    G -->|alert needed| H[alert_human]
+    G -->|no alert| I[End of replay minute]
     H --> I
 ```
 
-One pass through the graph is one "minute". `agent/run.py` replays the dataset one row per minute.
+One pass through the graph processes one row/minute from the selected historical trace. It does not send that row's traffic to a live application.
 
-| Node | What it does |
+| Node | Responsibility |
 |---|---|
-| `store_prediction` | Gets this minute's traffic, runs the LSTM for the forecast at +10 min, appends one row to `data/predictions.csv` |
-| `trigger_check` | Picks the mode. Priority: **unusual > timer > auto** |
-| `script_creator` | Writes a text report of the last 10 minutes: actual traffic, what was predicted earlier for that minute, the error, the new forecast, replicas, and the last 3 actions |
-| `llm_unusual` | LLM call because something unusual happened |
-| `llm_timer` | LLM call because the timer is due |
-| `auto_scale` | No LLM. Scales up at once, scales down only when the last 10 minutes all needed fewer replicas |
-| `apply_and_log` | Runs the guardrail, sets replicas, writes `data/actions.csv`, decides whether an alert is needed |
-| `alert_human` | Only if something is wrong. The LLM writes the email, it is saved in `data/alerts/` and sent if email is enabled |
+| `store_prediction` | Reads the selected app's current trace value, runs the trained LSTM to forecast traffic at `t + 10`, and records the prediction. |
+| `trigger_check` | Selects the `unusual`, `timer`, or `auto` decision mode. |
+| `script_creator` | Builds a short report from recent predictions, errors, traffic, replicas, and actions. |
+| `llm_unusual` | Calls the configured LLM when an unusual condition is detected. |
+| `llm_timer` | Calls the configured LLM for periodic review. |
+| `auto_scale` | Uses a deterministic formula for ordinary minutes. |
+| `apply_and_log` | Applies the replica-count guardrail, records the decision, and evaluates alert conditions. |
+| `alert_human` | Creates an alert message, saves it to disk, and attempts SMTP delivery when email is enabled. |
 
-### The three modes (decided in plain code)
+### Monitoring workflow
 
-| Mode | When | Default |
-|---|---|---|
-| `unusual` | Forecast jumps more than 30% in one minute (and is above 50% of capacity), or forecast or traffic is above 95% of capacity, or forecast error over the last 5 minutes is above 50% | cooldown 3 min |
-| `timer` | Every N minutes since the last LLM check. An unusual call resets the timer | every 5 min |
-| `auto` | Everything else | |
+```mermaid
+flowchart LR
+    A[Python agent / replay] -->|HTTP /metrics| B[Prometheus]
+    B --> C[Grafana dashboard]
+    A --> D[Local CPU/RAM and process metrics]
+    D --> B
+```
 
-### Guardrail
+Prometheus and Grafana run in Docker. The Python agent runs separately on the host and exposes the `/metrics` endpoint. The metrics include both replay/simulation data and live resource readings for the Python process and host machine.
 
-Applied to every decision, LLM or auto: replicas stay between min and max, a single decision can at most double the replicas (always +2 allowed) and at most remove 25% (always -1 allowed). The LLM answer is also checked: it must be a JSON object with a numeric `replicas`. If the LLM times out, has no key, or returns garbage, the agent holds the current replicas and records the error.
+**Important distinction:** `cloud_allocator_replicas` represents the agent's simulated replica count. It is not a count of running Docker containers, Kubernetes Pods, or cloud instances.
 
-### Alerts
+## What is implemented
 
-An alert fires when:
+- Saved per-app LSTM checkpoints for the supported apps listed below.
+- Traffic replay and 10-minute-ahead inference.
+- LangGraph workflow with `unusual`, `timer`, and `auto` paths.
+- Replica decision guardrails and action/prediction CSV logs.
+- Fake provider for no-cost local workflow tests, plus optional Gemini and Mistral providers.
+- Alert files and optional Gmail SMTP delivery.
+- Prometheus metrics exporter for replay behavior, decision activity, alerts, email outcomes, graph duration, Python process resources, and host resources.
+- Docker Compose setup for Prometheus and Grafana.
+- Grafana dashboard provisioned from `monitoring/grafana/dashboards/cloud-allocator-overview.json`.
 
-1. the LLM sets `"escalate": true` (scaling cannot fix it: attack-like traffic, a bug, unreliable forecasts),
-2. the LLM call failed **2 times in a row** (`LLM_FAILURES_BEFORE_ALERT`; one busy-server error is not an emergency),
-3. traffic was above capacity for 5 minutes in a row, or
-4. replicas are at the maximum and traffic is still above capacity.
-
-A 30-minute cooldown prevents email spam. The email is written by the LLM from the last 60 minutes of data and may only use numbers from that report. If the LLM cannot write it, a plain-code version is used, so an alert is never lost. Two CSV files are attached: `last_hour_predictions.csv` and `last_actions.csv`.
-
-### Output files (`agent/data/`, created on each run)
-
-| File | Content |
-|---|---|
-| `predictions.csv` | `minute, traffic_now, forecast, forecast_for, replicas`, one row per minute |
-| `actions.csv` | `minute, mode, reason, traffic_now, forecast, replicas_before, proposed, applied, action, decision_reason`, one row per LLM call or replica change |
-| `alerts/alert_<minute>.txt` | Every urgent email, including its send status |
-
----
+Not implemented yet: changing real application replicas, gathering per-replica metrics from a deployed workload, modelling replica startup delay, and demonstrating measured cost/SLO improvements over baseline policies.
 
 ## Repository layout
 
-```
+```text
 Major_Project/
-  data/dataset.csv          Azure Functions per-minute traffic, 318 apps (large, do not open in an editor)
-  models/                   one LSTM per app (app_1, app_62, app_123, app_185, app_248, app_318) + meta.json
-  notebook/
-    lstm_model.ipynb        data exploration and forecaster comparison
-    predict.py              loads a model and predicts traffic 10 minutes ahead
-    notebook_readme.md
-  agent/                    the LangGraph agent
-    config.py               every setting in one place
-    state.py                the dictionary passed between nodes
-    llm.py                  fake / Gemini / Mistral, retries, fallback model, reply checking, alert email writer
-    mailer.py               SMTP email sender
-    nodes.py                the 8 nodes
-    graph.py                the wiring
-    run.py                  start here
-    .env.example            copy to agent/.env and fill in your keys
-    README.md               how the agent works, in detail
-  test/
-    llm_tester.py           checks llm.py alone (decision + alert email text)
-    graph_tester.py         runs the real graph for 12 minutes and checks everything (30 checks)
-  learning/learn_agent.md   the agent explained file by file, for beginners
-  Reaserch_Papers/          papers used for the project
-  requirements.txt          all dependencies (notebook, forecaster and agent)
+├── agent/
+│   ├── config.py                 # Paths and controller/LLM/alert settings
+│   ├── state.py                  # State shared between graph nodes
+│   ├── graph.py                  # LangGraph wiring
+│   ├── nodes.py                  # Forecast, decisions, guardrails, and alerts
+│   ├── llm.py                    # Fake/Gemini/Mistral providers and output handling
+│   ├── mailer.py                 # SMTP mail sender
+│   ├── run.py                    # Agent replay entry point and metrics exporter setup
+│   ├── metrics.py                # Prometheus metrics and live process/host sampling
+│   ├── .env.example              # Example API/email variables; copy to .env
+│   └── data/                     # Generated predictions, actions, and alert files
+├── models/                       # Saved per-app .pt checkpoints and metadata
+├── notebook/
+│   ├── lstm_model.ipynb          # Data analysis, training, and evaluation
+│   ├── predict.py                # Checkpoints and prediction/backtest CLI
+│   └── notebook_readme.md        # Notebook-specific notes
+├── test/
+│   ├── graph_tester.py           # End-to-end graph test
+│   ├── llm_tester.py             # Provider/LLM behavior test
+│   └── output/                   # Test outputs, kept separate from agent/data
+├── monitoring/
+│   ├── prometheus.yml             # Prometheus scrape configuration
+│   └── grafana/
+│       ├── provisioning/          # Grafana datasource/dashboard provisioning
+│       └── dashboards/            # Dashboard JSON
+├── Reaserch_Papers/               # Papers collected for project research
+├── docker-compose.monitoring.yml # Prometheus + Grafana services
+├── monitoring-requirements.txt   # Monitoring dependencies plus project requirements
+├── requirements.txt              # Main Python dependencies
+├── MONITORING_SETUP.md            # Detailed monitoring setup/troubleshooting, if present
+├── MONITORING.md                  # Monitoring notes from earlier patch, if present
+├── .gitignore
+├── LICENSE
+└── README.md
 ```
 
-`src/live_simulator.py` (the future simulator) does not exist yet.
+The historical dataset may not be stored in Git because of its size. `notebook/predict.py` attempts to download it with `gdown` if it is not found in the expected locations. Model checkpoints are expected in `models/` or `notebook/models/`; check that the checkpoint for the chosen app exists before running the agent.
 
----
+## Requirements
 
-## Quick start
+- Python version compatible with the dependencies in `requirements.txt`.
+- A virtual environment is recommended.
+- Internet access for downloading the dataset if it is not already present, and for calling Gemini/Mistral APIs or sending SMTP email.
+- Docker Desktop for Windows, or Docker Engine with Compose, to run Prometheus and Grafana.
+- API keys only for the real LLM providers. The `fake` provider does not need an API key.
 
-Commands are for the project root (`Major_Project/`). On Windows use PowerShell.
+## Installation
 
-**1. Install**
+Run commands from the repository root (`Major_Project/`). On Windows, use PowerShell.
 
-```bash
-pip install -r requirements.txt        # or: uv pip install -r requirements.txt
+### 1. Create and activate a virtual environment (recommended)
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
 ```
 
-**2. Check the forecaster alone** (expect WAPE close to 0.027)
+If PowerShell blocks activation, use your normal approved environment activation method, or run the project's interpreter directly.
 
-```bash
+### 2. Install project dependencies
+
+```powershell
+python -m pip install -r requirements.txt
+```
+
+### 3. Install monitoring dependencies
+
+```powershell
+python -m pip install -r monitoring-requirements.txt
+```
+
+`monitoring-requirements.txt` includes `requirements.txt`, `prometheus-client`, and `psutil`. The `psutil` package is used to sample real CPU and memory values from the Python process and host machine.
+
+### 4. Confirm the dataset and model files
+
+The prediction utility searches for the dataset in `notebook/` or the project root, including common `data/` subfolders. If no dataset is found, it attempts to download the dataset using `gdown`. Make sure the relevant `.pt` file exists for the app you intend to use, e.g. `models/app_185.pt`.
+
+## Configuration and secrets
+
+### Agent settings: `agent/.env`
+
+Copy `agent/.env.example` to `agent/.env` and fill in only the variables you need:
+
+```dotenv
+GEMINI_API_KEY=your_gemini_api_key
+MISTRAL_API_KEY=your_mistral_api_key
+EMAIL_SENDER=your_gmail_address@gmail.com
+EMAIL_PASSWORD=your_16_character_gmail_app_password
+EMAIL_TO=recipient@example.com
+```
+
+The `fake` provider does not need keys. Gemini requires `GEMINI_API_KEY`, and Mistral requires `MISTRAL_API_KEY`. For Gmail SMTP, use an App Password with 2-Step Verification enabled, not your normal Google account password. `EMAIL_TO` can contain multiple comma-separated addresses if your email configuration supports that.
+
+### Grafana password: root `.env` (optional)
+
+Docker Compose reads a different `.env` file from the **project root**, beside `docker-compose.monitoring.yml`. It can contain:
+
+```dotenv
+GRAFANA_ADMIN_PASSWORD=choose_a_strong_local_password
+```
+
+Keep this separate from `agent/.env`. Do not commit either file or share its contents. If Grafana's data volume was initialized with a previous password, changing the Compose variable may not automatically update the existing Grafana user's password; use Grafana's password-management process if needed.
+
+Most controller settings, such as the default app, timer interval, thresholds, replica limits, cooldowns, and SMTP options, are in `agent/config.py`.
+
+## Run the forecasting model
+
+From the project root:
+
+```powershell
 python notebook/predict.py --app app_62 --backtest
 ```
 
-**3. Check the LLM layer alone** (nothing is saved, no email is sent)
+To create a forecast from the last available row:
 
-```bash
-python test/llm_tester.py --provider fake       # no internet, no key
-python test/llm_tester.py --provider gemini     # needs the key in agent/.env
+```powershell
+python notebook/predict.py --app app_62
 ```
 
-**4. Check the whole graph** (real LSTM, real data, 12 minutes, writes only to `test/output/`)
+For a specific minute or all available checkpoints:
 
-```bash
-python test/graph_tester.py                          # fake LLM:  28 checks
-python test/graph_tester.py --provider gemini        # real LLM:  29 checks
-python test/graph_tester.py --provider gemini --send-email   # also sends ONE real email: 30 checks
+```powershell
+python notebook/predict.py --app app_62 --at 15000
+python notebook/predict.py --all
 ```
 
-Every line must say `[PASS]`. The exit code is 0 when all checks pass.
+The backtest uses the notebook's chronological split and prints WAPE plus under/over-prediction rates. Actual scores depend on the dataset and checkpoint version in your working copy.
 
-**5. Run the agent**
+## Run and test the agent
 
-```bash
-python agent/run.py --minutes 120 --tick 0                            # fake LLM, free
-python agent/run.py --provider gemini --timer 3 --minutes 60 --quiet  # real LLM
-python agent/run.py --provider mistral
-python agent/run.py --provider gemini --email                         # also send alert emails
+### Run with the fake provider first
+
+The fake provider is the recommended way to test the graph without spending API quota:
+
+```powershell
+python agent/run.py --minutes 30 --provider fake --tick 1 --app app_185
 ```
 
-**6. Keys and email.** Copy `agent/.env.example` to `agent/.env` and fill in what you need:
+`--tick 1` waits one second between replay minutes. Use `--tick 0` only when intentionally running the replay as fast as possible; fast replay may finish before Prometheus can scrape intermediate values.
 
+### Use a real LLM provider
+
+```powershell
+python agent/run.py --minutes 30 --provider gemini --tick 1 --app app_185
+python agent/run.py --minutes 30 --provider mistral --tick 1 --app app_185
 ```
-GEMINI_API_KEY=...
-MISTRAL_API_KEY=...
-EMAIL_SENDER=your_address@gmail.com
-EMAIL_PASSWORD=your16characterapppassword
-EMAIL_TO=person_to_alert@example.com
-```
 
-For Gmail, turn on 2-Step Verification and create an app password (your normal password will not work). Write the app password **without spaces**. If email is on but a setting is missing, the agent warns you and saves the alerts as files only. Never commit `.env`.
+These commands require the matching API key in `agent/.env` and can consume API quota. The LLM configuration, retry policy, fallback Gemini model, and timeouts are defined in `agent/config.py` and `agent/llm.py`.
 
-### `run.py` options
+### CLI options for `agent/run.py`
 
-| Option | Meaning |
+| Option | Purpose |
 |---|---|
-| `--minutes N` | Replay N minutes (default: until the data ends) |
-| `--tick S` | Seconds between minutes (default 1, `0` = as fast as possible) |
-| `--timer N` | Minutes between normal LLM checks (default 5) |
-| `--app app_1` | Which app to replay (needs a model file for it) |
-| `--provider` | `fake`, `gemini` or `mistral` |
-| `--email` | Really send alert emails |
-| `--quiet` | Print only minutes with an LLM call, a replica change or an alert |
+| `--minutes N` | Replay at most `N` minutes; default is to continue to the end of the available trace. |
+| `--tick S` | Delay in seconds between replay minutes. `0` runs without delay. |
+| `--timer N` | Set the interval between normal LLM checks. |
+| `--app app_185` | Choose an app with a corresponding saved model. |
+| `--provider` | Select `fake`, `gemini`, or `mistral`. |
+| `--email` | Enable real alert-email sending for the run. Without this, alerts are saved to files. |
+| `--quiet` | Print only minutes with an LLM call, replica change, or alert. |
+| `--metrics-port 8000` | Port for the Prometheus exporter; default is `8000`. |
+| `--no-metrics` | Disable Prometheus metrics for this run. |
+| `--test-alert` | Force one test alert on the first replay minute. With `--email`, this can send a real email. Verify the recipient first. |
+| `--serve-after-replay` | Keep the exporter alive after the replay completes so Prometheus can continue scraping the final values and live process/host resources. Stop with `Ctrl+C`. |
 
-`Ctrl+C` stops safely. The CSV files are already written and a summary is printed.
+The agent writes its replay logs under `agent/data/`, including `predictions.csv`, `actions.csv`, and `alerts/alert_<minute>.txt`. Running the agent calls `nodes.reset_files()`, so use a backup if you need to retain generated output from a prior run.
 
-### Settings (`agent/config.py`)
+### Test scripts
 
-All tuning is in this one file: replay start (70% point of the data), capacity per replica (computed so the average training load needs 5 replicas), timer, the three "unusual" thresholds, guardrail limits, alert rules, SMTP settings and LLM settings. Gemini uses `GEMINI_MODEL` first and `GEMINI_FALLBACK_MODEL` automatically if the first one fails; busy-server errors (429/5xx) are retried `LLM_RETRIES` times first. Mistral uses `mistral-small-latest`. If your key rejects a model name, change it there; the full error text is printed as `LLM ERROR`.
+Basic syntax checks:
 
----
+```powershell
+python -m compileall -q agent test
+python -m py_compile agent/run.py agent/metrics.py
+```
 
-## The forecaster
+Test the LLM abstraction using the fake provider:
 
-**Task:** at minute `t`, predict traffic at `t + 10`.
+```powershell
+python test/llm_tester.py --provider fake
+```
 
-**Data:** Azure Functions invocation counts per minute: 20,160 minutes (14 days) for 318 apps. Six apps were modelled, from busy to quiet: `app_1, app_62, app_123, app_185, app_248, app_318`.
+Test the full graph using the fake provider and real dataset/model. The graph test requires at least 9 minutes:
 
-**Fair test:** time split 70/30 with no shuffling, features use only the past, every method is scored on the same test minutes (6,038 per app).
+```powershell
+python test/graph_tester.py --provider fake --minutes 12 --app app_185
+```
 
-**Methods compared:** `naive`, `moving_avg`, `yesterday`, `gbm` (HistGradientBoosting), `gbm_q90`, `lstm` (PyTorch, 60-minute window), `lstm_q90`.
+Optional real-provider tests:
 
-### Results from the notebook (mean over 6 apps)
+```powershell
+python test/llm_tester.py --provider gemini
+python test/llm_tester.py --provider mistral
+python test/graph_tester.py --provider gemini --minutes 12 --app app_185
+```
 
-| Method | WAPE | under_10pct | over_10pct |
-|---|---|---|---|
-| lstm | **0.189** | 0.068 | 0.139 |
-| gbm | 0.191 | 0.069 | 0.144 |
-| gbm_q90 | 0.308 | **0.019** | 0.258 |
-| moving_avg | 0.356 | 0.064 | 0.174 |
-| yesterday | 0.359 | 0.157 | 0.188 |
-| naive | 0.361 | 0.102 | 0.109 |
-| lstm_q90 | 0.472 | **0.014** | 0.266 |
+Real-provider tests need API keys and can fail because of network, quota, service availability, or invalid model configuration. To make the graph test send one real test email, add `--send-email` only after checking the sender and recipient settings:
 
-WAPE is total absolute error divided by total traffic (lower is better). `under_10pct` is the share of minutes predicted more than 10% too low (risk of slowness). `over_10pct` is the share predicted more than 10% too high (wasted cost).
+```powershell
+python test/graph_tester.py --provider fake --minutes 12 --app app_185 --send-email
+```
 
-What the numbers say, without overselling:
+The graph tester writes its test output under `test/output/`, separate from the operational output under `agent/data/`. Review the test output and require the expected checks to pass; a successful syntax check alone is not a behavioral test.
 
-- **LSTM and GBM are a tie.** The 0.002 gap comes from one bursty app (`app_185`). One seed, 6 apps.
-- **Simple baselines win on smooth apps** (`moving_avg` beats both learned models on `app_1` and `app_123`).
-- **`app_185` is not solved.** WAPE is near 1.0 for every method.
-- WAPE is a forecasting score, not a cost or SLO score. The final choice of forecaster should be decided by a simulator.
+## Prometheus and Grafana monitoring
 
-Each `.pt` file holds the weights plus scaling values (`mu`, `sd`, `dsd`), `n_static`, `W=60` and `H=10`. Models are **per app**: a new app needs its own training run.
+### 1. Start the monitoring stack
 
----
+Make sure Docker Desktop is running, then run this from the project root:
 
-## What is tested and what is not
+```powershell
+docker compose -f docker-compose.monitoring.yml up -d
+```
 
-| Item | State |
-|---|---|
-| Forecaster evaluation | Done in the notebook |
-| Agent graph, all 8 nodes, routing, guardrail, CSV outputs | `test/graph_tester.py`, real LSTM and real data, fake and Gemini LLM |
-| Real Gemini calls (decision and alert email text) | Working. A 134-minute replay is saved in `agent/data/` |
-| Real email through Gmail | A test email was sent with `mailer.send_email`. The forced alert inside `graph_tester.py --send-email` needs a re-run to confirm |
-| Mocked failure cases (junk reply, blocked reply, timeout, no key, SMTP failure) | Tested earlier on synthetic data with mocks |
-| Real **Mistral** calls | **Not run yet** |
-| LLM failure alert (2 failures in a row) | **Not working until `llm_failures` is added to `AgentState`** (see Limitations) |
-| Behaviour under a real traffic spike or an overloaded app | **Not tested** |
+Check service status and logs:
 
-The thresholds in `config.py` (30% spike, 95% capacity, 50% forecast error) are first guesses and need tuning.
+```powershell
+docker compose -f docker-compose.monitoring.yml ps
+docker compose -f docker-compose.monitoring.yml logs --tail 100 prometheus grafana
+```
 
-### What the saved real run shows
+The Compose file runs Prometheus and Grafana in containers. The Python agent runs on Windows and exposes its metrics on port `8000`. Prometheus reaches the host process through `host.docker.internal:8000`, configured in `monitoring/prometheus.yml`.
 
-The 134-minute replay of `app_62` (minutes 14112 to 14245) with Gemini:
+### 2. Run the agent with metrics enabled
 
-- 40 logged decisions: 26 timer calls to the LLM and 14 changes made by the plain formula. No "unusual" event happened.
-- The LLM held the replicas 22 times and scaled up 4 times. It never scaled down. All 8 scale-downs and 6 of the 10 scale-ups came from the plain formula.
-- Replicas moved between 6 and 8, with 18 changes in 134 minutes. On this smooth app, the LLM mostly confirmed what the formula would do. Whether it adds value on harder traffic is not measured yet.
+Start a replay with a delay and keep the exporter alive afterward:
 
----
+```powershell
+python agent/run.py --minutes 30 --provider fake --tick 1 --app app_185 --serve-after-replay
+```
+
+Keep this terminal running. Do not start a second agent on the same metrics port. Use `--metrics-port 8001` if port 8000 is already occupied, and update the target in `monitoring/prometheus.yml` to `host.docker.internal:8001` before restarting/recreating Prometheus.
+
+### 3. Open the local interfaces
+
+- Python raw metrics: <http://localhost:8000/metrics>
+- Prometheus: <http://localhost:9090>
+- Prometheus scrape targets: <http://localhost:9090/targets>
+- Grafana: <http://localhost:3000>
+
+In Grafana, open **Dashboards → Cloud Allocator → Agentic Cloud Allocator Overview**. The data source and dashboard are provisioned from the files in `monitoring/grafana/provisioning/` and `monitoring/grafana/dashboards/`.
+
+For the first check, set Grafana's time range to **Last 15 minutes** and use a refresh interval such as 5 seconds. In Prometheus, query:
+
+```promql
+up{job="cloud-allocator"}
+```
+
+A value of `1` means the target is being scraped successfully. A value of `0` means Prometheus discovered the target but could not scrape it. No result means the series/job has not appeared or the job name differs; inspect the Targets page for details.
+
+### 4. PromQL examples
+
+Current simulated replica count:
+
+```promql
+cloud_allocator_replicas{app="app_185"}
+```
+
+Historical traffic and LSTM forecast:
+
+```promql
+cloud_allocator_traffic_requests_per_minute{app="app_185"}
+cloud_allocator_forecast_requests_per_minute{app="app_185"}
+```
+
+Actual Python agent process memory in bytes:
+
+```promql
+cloud_allocator_agent_process_memory_bytes{app="app_185"}
+```
+
+Python process CPU percentage and host CPU percentage:
+
+```promql
+cloud_allocator_agent_process_cpu_percent{app="app_185"}
+cloud_allocator_host_cpu_percent{app="app_185"}
+```
+
+Email sends/failures reported by the agent over the last hour:
+
+```promql
+increase(cloud_allocator_emails_sent_total{app="app_185"}[1h])
+increase(cloud_allocator_email_failures_total{app="app_185"}[1h])
+```
+
+Scaling changes by direction over the last 15 minutes:
+
+```promql
+increase(cloud_allocator_replica_changes_total{app="app_185",direction="scale_up"}[15m])
+increase(cloud_allocator_replica_changes_total{app="app_185",direction="scale_down"}[15m])
+```
+
+Prometheus counters are cumulative since the Python process started; use `increase(...[window])` to estimate the increase over a time window. Gauges show the latest sampled or recorded value. The graph-duration histogram exposes bucket, count, and sum series.
+
+### 5. What the dashboard metrics mean
+
+| Metric/panel | Meaning | Important caveat |
+|---|---|---|
+| Observed traffic | Requests/minute from the historical dataset at the current replay position. | These are not live HTTP requests to a deployed app. |
+| Forecast traffic | LSTM's predicted requests/minute. | Forecast quality must be evaluated against future observed values. |
+| Current/proposed replicas | Applied simulated count and the pre-guardrail proposal. | No real container or Pod is created by this metric. |
+| Post-decision utilization | Historical traffic divided by simulated capacity after the decision. | It is not CPU utilization. |
+| Pre-scale overload | Whether the trace traffic exceeded capacity before the simulated decision. | It does not model replica startup delay. |
+| Scaling actions | Changes to the simulated replica count. | Does not indicate live infrastructure operations. |
+| LLM calls/failures | Decision branch calls and errors observed by the agent. | A call count is not a measure of decision quality. |
+| Graph duration | Time spent invoking the LangGraph workflow for each replay minute. | It is not the application's HTTP latency. |
+| Agent process CPU/memory | Live CPU and resident memory used by the Python process. | These are agent-process measurements, not per-replica app measurements. |
+| Host CPU/RAM | Live overall resource measurements from the machine running Python. | Includes other activity on that machine. |
+| Email metrics | Alert attempts, send outcomes, failures, and alerts saved without sending, as reported by the agent. | A successful SMTP submission does not guarantee that a message reaches the recipient's inbox. |
+
+### 6. Troubleshooting
+
+- **`localhost:8000/metrics` does not open:** start `agent/run.py` with metrics enabled; check terminal errors and verify that port 8000 is not already in use.
+- **Prometheus target is DOWN:** first verify `http://localhost:8000/metrics` from Windows. Check `docker compose -f docker-compose.monitoring.yml logs --tail 100 prometheus` and the target error at `/targets`.
+- **No changing graphs:** use `--tick 1` instead of `--tick 0`, allow at least one or two scrape intervals, and keep the agent running. Add `--serve-after-replay` if you want the endpoint to remain available after the replay.
+- **Dashboard is empty:** confirm the target is UP, select the app matching the `--app` argument, and use an appropriate time range.
+- **Metrics port conflict:** use `--metrics-port 8001`, and change the scrape target in `monitoring/prometheus.yml` to `host.docker.internal:8001`.
+- **Grafana dashboard or configuration changes do not show up:** run `docker compose -f docker-compose.monitoring.yml up -d --force-recreate` after saving the configuration files.
+- **Email missing:** inspect the terminal's alert status and the corresponding file under `agent/data/alerts/`. Check the sender, recipient, app password, network, and SMTP error text. Test with a recipient mailbox you control.
+- **Metrics endpoint exits after the replay:** add `--serve-after-replay`; press `Ctrl+C` to stop the process afterward.
+
+## Email alerts
+
+The agent saves alert messages under `agent/data/alerts/` even when sending is disabled. The `--email` flag enables SMTP sending for a run. The `--test-alert` option forces one test alert on the first replay minute; it is intended for validating the existing alert path and can send a real email when combined with `--email`.
+
+To test one email safely:
+
+1. Check `EMAIL_SENDER`, `EMAIL_PASSWORD`, and `EMAIL_TO` in `agent/.env`.
+2. Confirm that `EMAIL_TO` is an inbox you control.
+3. Run:
+
+   ```powershell
+   python agent/run.py --minutes 3 --provider fake --tick 1 --app app_185 --email --test-alert --serve-after-replay
+   ```
+
+4. Check the console for the reported SMTP outcome, inspect the recipient's Inbox and Spam folders, and check the generated alert text file.
+
+This test attempts to send a real email. Do not run it against an unintended recipient. SMTP acceptance is not an end-to-end guarantee of mailbox delivery.
+
+## Forecasting experiment and results
+
+**Forecast task:** at minute `t`, predict traffic at `t + 10` minutes.
+
+The notebook describes Azure Functions invocation counts per minute: 20,160 minutes (14 days) for 318 apps. Saved checkpoints are available for six apps: `app_1`, `app_62`, `app_123`, `app_185`, `app_248`, and `app_318`. The evaluation uses a chronological 70/30 split without shuffling, and features use historical values rather than future observations.
+
+The notebook compared naive, moving-average, yesterday's-traffic, HistGradientBoosting (`gbm`), quantile-style baselines, and LSTM models with a 60-minute input window. The table below records the results documented by the current notebook/README; rerun the notebook to reproduce results for your local dataset and checkpoint versions.
+
+| Method | Mean WAPE | `under_10pct` | `over_10pct` |
+|---|---:|---:|---:|
+| LSTM | **0.189** | 0.068 | 0.139 |
+| GBM | 0.191 | 0.069 | 0.144 |
+| GBM q90 | 0.308 | **0.019** | 0.258 |
+| Moving average | 0.356 | 0.064 | 0.174 |
+| Yesterday | 0.359 | 0.157 | 0.188 |
+| Naive | 0.361 | 0.102 | 0.109 |
+| LSTM q90 | 0.472 | **0.014** | 0.266 |
+
+- **WAPE** is total absolute error divided by total actual traffic; lower is better.
+- `under_10pct` is the share of test minutes predicted more than 10% too low.
+- `over_10pct` is the share of test minutes predicted more than 10% too high.
+
+Interpretation should be cautious: LSTM and GBM are very close on the reported mean; the gap is only 0.002. Performance differs by app, and the bursty `app_185` remains difficult to forecast. Forecast metrics alone do not prove improved scaling cost or service-level objectives (SLOs). A simulator and controlled policy comparison are needed for that claim.
+
+## Testing checklist
+
+Use this checklist when validating a local setup:
+
+- [ ] `python -m compileall -q agent test` completes successfully.
+- [ ] `python test/llm_tester.py --provider fake` completes successfully.
+- [ ] `python test/graph_tester.py --provider fake --minutes 12 --app app_185` passes its checks.
+- [ ] `docker compose -f docker-compose.monitoring.yml ps` shows Prometheus and Grafana running.
+- [ ] `http://localhost:8000/metrics` returns Prometheus-formatted metrics while the agent is running.
+- [ ] `up{job="cloud-allocator"}` returns `1` in Prometheus.
+- [ ] The dashboard is populated with the selected app and time range.
+- [ ] CPU and memory panels return live process/host metrics.
+- [ ] If email is enabled, a test message is received by the intended recipient.
+- [ ] If a real provider is configured, its test succeeds and API errors are reviewed.
+
+Optional real-provider and email tests use external services and may consume API quota or send real messages. Passing these tests does not prove that the code is free of all bugs.
+
+## Known limitations
+
+- **No live replica control:** `set_replicas()` in `agent/nodes.py` is currently a placeholder. Desired/applied replica values change only in in-memory replay state.
+- **Historical replay only:** the trace is replayed from a dataset; the selected traffic does not hit a running application, and the controller cannot change what happened in the historical trace.
+- **Instant replica assumption:** the summary assumes newly requested replicas are available instantly. Real startup delays and readiness are not modelled, so overload/availability conclusions are optimistic.
+- **No full policy benchmark:** performance versus threshold-based autoscaling, target tracking, or another forecasting/controller combination has not been established.
+- **Limited model coverage:** trained checkpoints are available for six selected apps out of the 318 in the dataset; new apps require training and evaluation.
+- **Model-selection caution:** keep the test set untouched during model selection. Use a validation split for choosing checkpoints/hyperparameters and report final test results separately.
+- **Monitoring scope:** CPU/RAM metrics describe the host and Python agent process. Per-replica workload metrics require a real deployment and instrumentation.
+- **Thresholds need tuning:** spike, capacity, forecast-error, timer and cooldown thresholds are configuration choices and need broader validation.
+- **Consecutive LLM-failure alert state:** `apply_and_log` updates an `llm_failures` state key, but the current `AgentState` declaration in `agent/state.py` does not declare that key. Depending on LangGraph state handling, the consecutive-failure count may not persist across graph turns, so the “alert after N consecutive LLM failures” behavior must be fixed and tested before relying on it. The Prometheus `cloud_allocator_llm_failures_total` counter still records individual decision errors observed by the metrics exporter.
+- **Prototype status:** this is a research/portfolio project, not a production-ready cloud controller. Do not point it at production infrastructure without more validation, security controls, rollback behavior, and staged testing.
 
 ## Roadmap
 
-| Step | Status |
+| Workstream | Status |
 |---|---|
-| Data exploration, baselines, GBM and LSTM forecasters | Done |
-| LangGraph agent: store, trigger, script, three branches, guardrail, logging, alert email | Done |
-| Real run: real model, real data, real Gemini, retries and fallback model | Done (one app, one replay) |
-| Test scripts for the LLM layer and the whole graph | Done |
-| Fix the `llm_failures` state bug, tune thresholds, try Mistral | Next |
-| Prometheus metrics and Grafana dashboard | To do |
-| Connect `set_replicas()` to Docker or Kubernetes | To do |
-| Simulator with a 2-minute replica start-up delay, SLO-miss and replica-minute metrics | To do (`src/live_simulator.py` does not exist yet) |
-| Compare policies: threshold rule, target tracking, forecast + schedule, forecast + agent | To do |
-| Unit tests, CI, deployment, demo video | To do |
+| Data exploration and baseline/LSTM forecasting | Implemented; results are documented in the notebook. |
+| LangGraph workflow, fake/real provider interface, guardrails, logs, alert path | Implemented for historical replay. |
+| Prometheus exporter and local Grafana dashboard | Implemented for replay metrics and host/process resources. |
+| Verify provider calls and actual SMTP delivery | Run separately in each environment; they depend on external services and credentials. |
+| Implement a small instrumented application and load generator | Planned. |
+| Connect agent decisions to Docker or Kubernetes desired replica counts | Planned; `set_replicas()` is a placeholder. |
+| Verify actual running/ready replicas and per-workload CPU/RAM/latency | Planned. |
+| Simulate replica startup delay, request latency, overload/SLO misses and costs | Planned. |
+| Compare rule-based, forecast-only and agentic policies on identical workloads | Planned. |
+| Add dedicated unit tests, CI, reproducible version pins, and a demo deployment | Planned. |
 
-## Limitations
+## Security notes
 
-- Only 6 of 318 apps have models. One seed, one split, 14 days of data.
-- `set_replicas()` is a placeholder. In the replay, new replicas count as instant, so the "minutes above capacity" number in the run summary is optimistic.
-- The agent is not yet compared against a rule-based controller. Its added value over plain rules is not measured. If a simulator shows it only matches the rules, that should be reported as is.
-- **Known bug:** `llm_failures` is written by `apply_and_log` but is not declared in `AgentState`. LangGraph silently drops undeclared keys, so the failure counter restarts every minute and the "LLM failed 2 times in a row" alert can never fire. Fix: add `llm_failures: int` to `AgentState` in `state.py`.
-- `nodes.py` contains the `force_alert` test check twice, and one comment mentions a `--test-alert` option that `run.py` does not have. `config.py` has `SMTP_PORT_STARTTLS`, but `mailer.py` does not use it yet. Clean these up.
-- Every minute the graph re-reads `predictions.csv` several times. This is fine for a replay but must change for a live loop.
-- **Design change from the first plan:** the early plan had the LLM only adjust one safety setting (headroom). In the current agent the LLM proposes a replica count, bounded by the guardrail. This is easier to explain but gives the LLM more influence, so the guardrail and the alert rules matter.
-- The replayed data is history, so scaling decisions cannot change user behavior.
-- This is a student portfolio project, not a production autoscaler.
+- Never commit `agent/.env` or the root `.env` used by Docker Compose.
+- Never put API keys, SMTP passwords, or credentials in screenshots, logs, notebooks, or Git history.
+- Rotate any credential that was accidentally committed or shared.
+- Do not expose ports `3000`, `8000`, or `9090` to the public internet without authentication, network restrictions, TLS, and a deliberate deployment configuration.
+- Change Grafana's default/local password before sharing the machine or exposing the service.
+- Keep the live-scaling adapter disabled until it has explicit replica limits, permission scoping, readiness checks, and a safe rollback path.
 
 ## License
 
-See the `LICENSE` file.
+See [`LICENSE`](LICENSE).

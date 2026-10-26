@@ -32,7 +32,7 @@ START_REPLICAS = None     # None = sized for the first traffic value
 
 # ---------------------------------------------------------------- script and timer
 SCRIPT_MINUTES = 10       # the script given to the LLM covers the last 10 minutes
-TIMER_EVERY = 5           # minutes between normal LLM checks (use 2 or 3 to test faster)
+TIMER_EVERY =     5    # minutes between normal LLM checks (use 2 or 3 to test faster)
 
 # ---------------------------------------------------------------- "unusual" rules (plain code, no LLM)
 SPIKE_RATIO = 1.3         # forecast is 30% higher than the previous minute's forecast
