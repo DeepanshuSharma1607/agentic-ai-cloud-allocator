@@ -1,0 +1,11 @@
+AegisCloud manuscript follow-up plan
+
+1. Reproduce forecast tables from notebook and capture per-app plots.
+2. Verify official bibliographic metadata and Azure Functions dataset provenance.
+3. Implement a deterministic policy simulator with configurable per-replica capacity and startup delay.
+4. Compare reactive, forecast-only, quantile, and guarded-LLM policies on identical trace windows.
+5. Report replica-minutes, over-capacity minutes, action churn, guardrail intervention rate, LLM failure rate, and alert quality.
+6. Replace working-draft wording and TODOs only after evidence is available.
+7. Format to the selected conference/journal template after venue selection.
+
+Important: no results for the policy benchmark are fabricated in the current draft. The forecast scores are transcribed from the repository's notebook documentation and must be reproduced before submission.
