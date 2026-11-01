@@ -1,0 +1,11 @@
+pandas
+numpy
+torch
+scikit-learn
+joblib
+matplotlib
+gdown
+ipykernel
+requests
+python-dotenv
+langgraph
