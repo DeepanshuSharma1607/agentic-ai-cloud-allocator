@@ -1,0 +1,3 @@
+-r requirements.txt
+prometheus-client>=0.20,<1.0
+psutil>=5.9,<8

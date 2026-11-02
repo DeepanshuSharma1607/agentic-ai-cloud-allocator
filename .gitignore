@@ -102,5 +102,3 @@ prometheus_data/
 grafana_data/
 prometheus-storage/
 grafana-storage/
-
-llm_talks/

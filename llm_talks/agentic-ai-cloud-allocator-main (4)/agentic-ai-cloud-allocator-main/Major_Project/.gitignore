@@ -1,0 +1,105 @@
+
+# ==============================
+# Python
+# ==============================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+.eggs/
+*.egg-info/
+wheels/
+
+# ==============================
+# Virtual environments
+# ==============================
+.venv/
+venv/
+env/
+ENV/
+
+# ==============================
+# Environment variables / secrets
+# ==============================
+.env
+.env.*
+!.env.example
+!.env.template
+secrets/
+*.pem
+*.key
+
+# ==============================
+# Datasets and generated data
+# ==============================
+/data/
+/datasets/
+**/datasets/
+**/raw/
+**/processed/
+agent/data/
+test/output/
+*.parquet
+*.feather
+
+# ==============================
+# ML model checkpoints and artifacts
+# ==============================
+*.pt
+*.pth
+*.ckpt
+*.h5
+*.keras
+*.onnx
+*.safetensors
+wandb/
+mlruns/
+lightning_logs/
+.tensorboard/
+
+# ==============================
+# Logs and temporary files
+# ==============================
+*.log
+logs/
+tmp/
+temp/
+*.tmp
+*.bak
+.DS_Store
+Thumbs.db
+
+# ==============================
+# Jupyter notebooks
+# ==============================
+.ipynb_checkpoints/
+*/.ipynb_checkpoints/
+
+# ==============================
+# Editors
+# ==============================
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ==============================
+# Testing / coverage
+# ==============================
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+
+# ==============================
+# Local monitoring data
+# ==============================
+prometheus_data/
+grafana_data/
+prometheus-storage/
+grafana-storage/

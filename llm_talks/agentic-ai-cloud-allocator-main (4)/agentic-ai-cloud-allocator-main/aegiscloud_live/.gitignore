@@ -1,0 +1,9 @@
+.env
+__pycache__/
+*.pyc
+data/live/*.csv
+data/predictions/*.csv
+data/agent/*.csv
+data/agent/alerts/*.txt
+data/loadgen/*.csv
+data/logs/*.log
