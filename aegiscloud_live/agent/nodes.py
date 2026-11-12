@@ -14,7 +14,6 @@ Every node is a plain function:  node(state) -> dict of the keys it changes.
 """
 import csv
 import math
-import sys
 
 import numpy as np
 import pandas as pd

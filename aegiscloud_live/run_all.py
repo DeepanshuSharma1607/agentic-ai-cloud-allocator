@@ -14,7 +14,6 @@ import os
 import subprocess
 import sys
 import time
-from pathlib import Path
 
 import httpx
 
@@ -69,6 +68,7 @@ def main():
     S.LOG_DIR.mkdir(parents=True, exist_ok=True)
     env = dict(os.environ, PYTHONPATH=str(ROOT) + os.pathsep + os.environ.get("PYTHONPATH", ""), PYTHONUNBUFFERED="1")
     procs = []
+    from obs.web import PORT as PORT_LOGS
 
     def launch(name, cmd):
         log = open(S.LOG_DIR / f"{name}.log", "w", encoding="utf-8")
@@ -81,6 +81,10 @@ def main():
                 ("prediction", uvicorn("prediction.server:app", S.PORT_PREDICTION), f"{S.URL_PREDICTION}/health"),
                 ("collector", uvicorn("traffic.collector.app:app", S.PORT_COLLECTOR), f"{S.URL_COLLECTOR}/health"),
                 ("loadgen", uvicorn("traffic.loadgen.app:app", S.PORT_LOADGEN), f"{S.URL_LOADGEN}/health")]
+        launch("logs", [PY, "-m", "obs.web"])                                        # live log page, started first
+        print("open      counter     http://localhost:8001   (APP 1: big live request counter)")
+        print("open      sender      http://localhost:8002   (APP 2: type a number, press Start, or run the demo)")
+        print(f"started  live logs   http://localhost:{PORT_LOGS}   (terminal: python -m obs.viewer --follow)")
         for name, cmd, health in plan:
             proc = launch(name, cmd)
             ok = wait_healthy(name, health, proc)

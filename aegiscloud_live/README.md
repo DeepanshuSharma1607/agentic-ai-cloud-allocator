@@ -64,14 +64,16 @@ Keep your original `lstm_requests_forecaster.pt` in `prediction/models/` too, or
 
 ## Things to know (honest limits)
 
-* **Tested:** the whole chain end to end with FAKE data and tiny FAKE models, 14 automated tests, and the dashboard loads
+* **Tested:** the whole chain end to end with FAKE data and tiny FAKE models, 75 automated tests, and the dashboard loads
   without errors. **Not tested:** your real `.pt` file, a real Gemini/Mistral call, and the look of the dashboard in a browser.
 * **Out-of-distribution live data.** The LSTM only knows the traffic range of your training data (6 to ~1,136 per tick).
   The dashboard warns when live traffic or any metric drifts far from it. `app_mem_mb` was almost constant in training,
   so the demo app holds ~103 MB of ballast to stay in range; if you monitor a different app, expect to see that warning.
 * **Daily pattern.** The model uses "yesterday at the same time" features, so the default `pattern` traffic follows your data's daily curve.
   Fixed or random traffic is legitimate for experiments but is unlike what the model learned.
-* **Replicas are simulated** (no Docker yet) and new replicas start instantly. `set_replicas()` in `agent/nodes.py` is the one place to connect real scaling.
+* **Two ways to run.** `python run_all.py` uses simulated replicas (new replicas start instantly). `python run_live.py` uses REAL replicas (Docker containers, Kubernetes Pods or local processes) - see `infra/README.md`. In both, the agent still assumes a new replica is ready at once; the real start-up delay is visible in the logs and in `data/infra/replica_events.csv`.
+* **Three apps.** Counter (big live request counter) at http://localhost:8001, Sender (number box, Start/Stop, one-click demo) at http://localhost:8002, Manager dashboard at http://localhost:8501.
+* **Logs.** Every part writes `data/logs/<part>.jsonl`. Watch them live in a browser (http://localhost:8006) or a terminal (`python -m obs.viewer --follow`).
 * **Capacity per replica** is `mean traffic / 5` from the seed, as in your old agent. Calibrating it from a real load test is the next accuracy step.
 * All agent "minutes" settings count ticks: `TIMER_EVERY = 12` is one real minute.
 * The load sender can only target the demo app configured in `settings.py` and is capped at `MAX_REQUESTS_PER_TICK`.

@@ -16,8 +16,12 @@ from typing import Literal
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
-import settings as S
+from obs import log as obslog
+from obs.middleware import RequestLogMiddleware
+from ui.sender import mount as mount_sender
 from traffic.loadgen.engine import LoadEngine
+
+obslog.setup("loadgen")                         # shared logging: console + data/logs/loadgen.jsonl
 
 
 class Plan(BaseModel):
@@ -53,6 +57,8 @@ async def lifespan(app):
 
 
 app = FastAPI(title="AegisCloud request sender", lifespan=lifespan)
+app.add_middleware(RequestLogMiddleware, name="loadgen", hot=())
+mount_sender(app)                               # APP 2: sender page + one-click demo at GET /
 
 
 @app.get("/health")

@@ -17,9 +17,14 @@ import argparse
 import sys
 import time
 
+import logging
+
 from agent import config as cfg
 from agent import llm
 from agent.state import new_state
+from obs import log as obslog
+
+alog = logging.getLogger("agent")
 
 
 def positive_int(text):
@@ -53,6 +58,7 @@ def check_setup():
 
 
 def main():
+    obslog.setup("agent")                                          # shared logging: console + data/logs/agent.jsonl
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(errors="replace")      # an LLM reply with odd characters must never crash the printing
     a = parse_args()
@@ -121,14 +127,19 @@ def main():
             stats["alerts"] += bool(alert)
             stats["over_capacity"] += over
 
+            alog.log(logging.INFO if mode == cfg.MODE_AUTO and after == before else logging.WARNING if alert else logging.INFO,
+                     "minute %s: traffic %.0f, +10 forecast %.0f, replicas %s -> %s [%s] %s",
+                     state["minute"], state["traffic_now"], state["forecast"], before, after, mode, state["decision"]["reason"][:120])
             if not a.quiet or mode != cfg.MODE_AUTO or after != before or alert:
                 h20 = state.get("forecast_h20")
                 print(f"minute {state['minute']} | traffic {state['traffic_now']:>7.0f} | +10: {state['forecast']:>7.0f} | "
                       f"+20: {'   n/a' if h20 is None else f'{h20:>6.0f}'} | replicas {before:>3} -> {after:<3} | {mode:<7} | "
                       f"{state['decision']['reason'][:60]}")
             if state["decision"].get("error"):
+                alog.warning("LLM error: %s", state["decision"]["reason"])
                 print(f"    LLM ERROR (full text): {state['decision']['reason']}")
             if alert:
+                alog.warning("ALERT: %s -> %s", alert, state["alert_status"])
                 print(f"    ALERT: {alert}\n    -> {state['alert_status']}")
 
             last_minute = tick["minute"]

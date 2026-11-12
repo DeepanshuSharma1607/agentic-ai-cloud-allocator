@@ -1,0 +1,14 @@
+data
+prediction
+frontend
+agent
+tests
+tools
+notebook
+.git
+.venv
+__pycache__
+*.pyc
+*.pt
+*.csv
+.env

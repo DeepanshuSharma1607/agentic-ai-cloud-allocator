@@ -28,8 +28,9 @@ def send_email(subject, body, attachments=()):
             with smtplib.SMTP_SSL(cfg.SMTP_HOST, cfg.SMTP_PORT, timeout=cfg.EMAIL_TIMEOUT) as server:
                 server.login(cfg.EMAIL_SENDER, cfg.EMAIL_PASSWORD)
                 server.send_message(msg)
+        except smtplib.SMTPAuthenticationError:
+            raise                                                 # wrong password: report it, do not retry on another port
         except (OSError, smtplib.SMTPConnectError):          # port 465 blocked: try STARTTLS on 587
-            # (a wrong password raises SMTPAuthenticationError, which is not caught here, so it is still reported clearly)
             with smtplib.SMTP(cfg.SMTP_HOST, cfg.SMTP_PORT_STARTTLS, timeout=cfg.EMAIL_TIMEOUT) as server:
                 server.starttls()
                 server.login(cfg.EMAIL_SENDER, cfg.EMAIL_PASSWORD)

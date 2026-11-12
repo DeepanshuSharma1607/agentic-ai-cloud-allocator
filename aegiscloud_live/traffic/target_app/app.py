@@ -24,6 +24,11 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 import settings as S
+from obs import log as obslog
+from obs.middleware import RequestLogMiddleware
+from ui.counter import mount as mount_counter
+
+obslog.setup("target_app")                      # shared logging: console + data/logs/target_app.jsonl
 
 
 class Window:
@@ -60,6 +65,8 @@ async def lifespan(app):
 
 
 app = FastAPI(title="AegisCloud demo target app", lifespan=lifespan)
+app.add_middleware(RequestLogMiddleware, name="target_app", hot=("/work",))
+mount_counter(app)                              # APP 1: big-screen counter page at GET /
 
 
 @app.get("/health")

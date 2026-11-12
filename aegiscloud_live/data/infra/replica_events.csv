@@ -1,0 +1,226 @@
+ts,event,replica,startup_s,desired,ready,detail
+1794389471.5,create_requested,aegis-replica-7fad20,,1,0,
+1794389477.14,ready,aegis-replica-7fad20,5.65,1,1,
+1794394698.86,create_requested,aegis-replica-700951,,1,0,
+1794394703.87,ready,aegis-replica-700951,5.03,1,1,
+1794405022.08,create_requested,aegis-replica-8cf788,,1,0,
+1794405032.53,ready,aegis-replica-8cf788,10.48,1,1,
+1794410405.51,create_requested,aegis-replica-436ad5,,1,0,
+1794410415.33,ready,aegis-replica-436ad5,9.85,1,1,
+1794411111.99,reset,,,1,0,"new spec: cpu 0.5 core, mem 192 MB, burn 1.2 ms"
+1794411112.0,ready,aegis-replica-436ad5,9.85,1,1,
+1794411112.52,removed,aegis-replica-436ad5,,1,0,
+1794411114.19,create_requested,aegis-replica-a632ca,,1,0,
+1794411120.95,ready,aegis-replica-a632ca,6.78,1,1,
+1794411267.34,reset,,,1,0,"new spec: cpu 0.5 core, mem 192 MB, burn 1.2 ms"
+1794411267.35,ready,aegis-replica-a632ca,6.78,1,1,
+1794411267.92,removed,aegis-replica-a632ca,,1,0,
+1794411269.24,create_requested,aegis-replica-32e8bf,,1,0,
+1794411275.88,ready,aegis-replica-32e8bf,6.67,1,1,
+1794411344.47,reset,,,1,0,"new spec: cpu 0.5 core, mem 192 MB, burn 1.2 ms"
+1794411344.47,ready,aegis-replica-32e8bf,6.67,1,1,
+1794411345.11,removed,aegis-replica-32e8bf,,1,0,
+1794411346.2,create_requested,aegis-replica-713cd5,,1,0,
+1794411353.83,ready,aegis-replica-713cd5,7.64,1,1,
+1794411382.76,reset,,,1,0,"new spec: cpu 0.5 core, mem 192 MB, burn 1.2 ms"
+1794411382.76,ready,aegis-replica-713cd5,7.64,1,1,
+1794411383.28,removed,aegis-replica-713cd5,,1,0,
+1794411384.41,create_requested,aegis-replica-d5f799,,1,0,
+1794411389.92,ready,aegis-replica-d5f799,5.53,1,1,
+1794411625.72,desired,,,1,1,1 -> 2 (agent)
+1794411626.98,create_requested,aegis-replica-eca0b2,,2,1,
+1794411631.77,desired,,,2,1,2 -> 1 (agent)
+1794411631.88,desired,,,1,1,1 -> 2 (agent)
+1794411633.46,ready,aegis-replica-eca0b2,6.49,2,2,
+1794411679.96,desired,,,2,2,2 -> 1 (agent)
+1794411680.37,draining,aegis-replica-eca0b2,,1,2,
+1794411681.58,removed,aegis-replica-eca0b2,,1,2,
+1794411749.14,desired,,,1,1,1 -> 2 (agent)
+1794411750.65,create_requested,aegis-replica-6af236,,2,1,
+1794411757.21,ready,aegis-replica-6af236,6.57,2,2,
+1794411794.68,desired,,,2,2,2 -> 1 (agent)
+1794411795.14,draining,aegis-replica-6af236,,1,2,
+1794411796.49,removed,aegis-replica-6af236,,1,2,
+1794411930.61,create_requested,aegis-replica-8f94b0,,1,0,
+1794411936.21,ready,aegis-replica-8f94b0,5.61,1,1,
+1794412103.98,desired,,,1,1,1 -> 2 (agent)
+1794412105.17,create_requested,aegis-replica-ac4a65,,2,1,
+1794412112.04,ready,aegis-replica-ac4a65,6.89,2,2,
+1794412174.4,desired,,,2,2,2 -> 1 (agent)
+1794412174.97,draining,aegis-replica-ac4a65,,1,2,
+1794412176.23,removed,aegis-replica-ac4a65,,1,2,
+1794412213.53,desired,,,1,1,1 -> 3 (agent)
+1794412215.7,create_requested,aegis-replica-1b59b5,,3,1,
+1794412215.7,create_requested,aegis-replica-b2cab8,,3,1,
+1794412221.16,ready,aegis-replica-1b59b5,6.6,3,2,
+1794412222.54,ready,aegis-replica-b2cab8,6.86,3,3,
+1794412288.62,desired,,,3,3,3 -> 4 (agent)
+1794412289.9,create_requested,aegis-replica-3884a3,,4,3,
+1794412296.01,ready,aegis-replica-3884a3,6.13,4,4,
+1794412329.12,desired,,,4,4,4 -> 3 (agent)
+1794412329.26,draining,aegis-replica-3884a3,,3,4,
+1794412330.48,removed,aegis-replica-3884a3,,3,4,
+1794412336.02,desired,,,3,3,3 -> 2 (agent)
+1794412336.35,draining,aegis-replica-b2cab8,,2,3,
+1794412337.63,removed,aegis-replica-b2cab8,,2,3,
+1794412339.19,desired,,,2,2,2 -> 1 (agent)
+1794412339.36,draining,aegis-replica-1b59b5,,1,2,
+1794412340.66,removed,aegis-replica-1b59b5,,1,2,
+1794412368.75,desired,,,1,1,1 -> 3 (agent)
+1794412368.77,desired,,,3,1,3 -> 4 (agent)
+1794412372.03,create_requested,aegis-replica-63e97a,,4,1,
+1794412372.03,create_requested,aegis-replica-71ded6,,4,1,
+1794412372.04,create_requested,aegis-replica-acb5e9,,4,1,
+1794412378.0,ready,aegis-replica-63e97a,8.34,4,2,
+1794412378.73,ready,aegis-replica-71ded6,7.76,4,3,
+1794412379.37,ready,aegis-replica-acb5e9,7.36,4,4,
+1794413067.13,desired,,,4,4,4 -> 3 (agent)
+1794413067.9,draining,aegis-replica-acb5e9,,3,4,
+1794413072.19,removed,aegis-replica-acb5e9,,3,4,
+1794413085.42,desired,,,3,3,3 -> 2 (agent)
+1794413085.79,draining,aegis-replica-71ded6,,2,3,
+1794413087.72,removed,aegis-replica-71ded6,,2,3,
+1794413087.73,desired,,,2,2,2 -> 1 (agent)
+1794413088.29,draining,aegis-replica-63e97a,,1,2,
+1794413089.75,removed,aegis-replica-63e97a,,1,2,
+1794413144.44,desired,,,1,1,1 -> 3 (agent)
+1794413145.77,create_requested,aegis-replica-cce6ae,,3,1,
+1794413145.77,create_requested,aegis-replica-5cf5f0,,3,1,
+1794413147.54,desired,,,3,1,3 -> 5 (agent)
+1794413149.9,create_requested,aegis-replica-7139a1,,5,1,
+1794413149.9,create_requested,aegis-replica-793e29,,5,1,
+1794413150.72,ready,aegis-replica-cce6ae,5.67,5,2,
+1794413151.49,ready,aegis-replica-5cf5f0,5.73,5,3,
+1794413153.55,ready,aegis-replica-7139a1,4.92,5,4,
+1794413154.17,ready,aegis-replica-793e29,4.3,5,5,
+1794413203.86,desired,,,5,5,5 -> 4 (agent)
+1794413204.09,draining,aegis-replica-793e29,,4,5,
+1794413205.26,removed,aegis-replica-793e29,,4,5,
+1794413207.01,desired,,,4,4,4 -> 3 (agent)
+1794413207.2,draining,aegis-replica-7139a1,,3,4,
+1794413208.23,removed,aegis-replica-7139a1,,3,4,
+1794413212.15,desired,,,3,3,3 -> 2 (agent)
+1794413212.22,draining,aegis-replica-5cf5f0,,2,3,
+1794413213.24,removed,aegis-replica-5cf5f0,,2,3,
+1794413229.38,desired,,,2,2,2 -> 1 (agent)
+1794413229.84,draining,aegis-replica-cce6ae,,1,2,
+1794413230.84,removed,aegis-replica-cce6ae,,1,2,
+1794413376.36,desired,,,1,1,1 -> 3 (agent)
+1794413378.27,create_requested,aegis-replica-55b790,,3,1,
+1794413378.27,create_requested,aegis-replica-a165fd,,3,1,
+1794413383.93,ready,aegis-replica-55b790,6.41,3,2,
+1794413385.25,ready,aegis-replica-a165fd,7.0,3,3,
+1794413427.82,desired,,,3,3,3 -> 2 (agent)
+1794413428.27,draining,aegis-replica-a165fd,,2,3,
+1794413429.28,removed,aegis-replica-a165fd,,2,3,
+1794413449.55,desired,,,2,2,2 -> 3 (agent)
+1794413451.02,create_requested,aegis-replica-8f3382,,3,2,
+1794413456.83,ready,aegis-replica-8f3382,5.82,3,3,
+1794413492.93,desired,,,3,3,3 -> 4 (agent)
+1794413493.93,create_requested,aegis-replica-30ce07,,4,3,
+1794413497.85,ready,aegis-replica-30ce07,3.93,4,4,
+1794413537.11,desired,,,4,4,4 -> 3 (agent)
+1794413537.56,draining,aegis-replica-8f3382,,3,4,
+1794413539.16,removed,aegis-replica-8f3382,,3,4,
+1794413557.9,desired,,,3,3,3 -> 4 (agent)
+1794413558.95,create_requested,aegis-replica-b9e789,,4,3,
+1794413562.88,ready,aegis-replica-b9e789,3.95,4,4,
+1794413612.32,desired,,,4,4,4 -> 3 (agent)
+1794413612.67,draining,aegis-replica-b9e789,,3,4,
+1794413613.61,removed,aegis-replica-b9e789,,3,4,
+1794413616.48,desired,,,3,3,3 -> 2 (agent)
+1794413617.01,draining,aegis-replica-30ce07,,2,3,
+1794413617.96,removed,aegis-replica-30ce07,,2,3,
+1794413644.08,desired,,,2,2,2 -> 4 (agent)
+1794413645.87,create_requested,aegis-replica-2bd29b,,4,2,
+1794413645.87,create_requested,aegis-replica-bda7ac,,4,2,
+1794413649.52,ready,aegis-replica-2bd29b,4.37,4,3,
+1794413650.14,ready,aegis-replica-bda7ac,4.29,4,4,
+1794413692.07,desired,,,4,4,4 -> 3 (agent)
+1794413692.6,draining,aegis-replica-bda7ac,,3,4,
+1794413693.6,removed,aegis-replica-bda7ac,,3,4,
+1794413697.2,desired,,,3,3,3 -> 2 (agent)
+1794413697.51,draining,aegis-replica-2bd29b,,2,3,
+1794413698.41,removed,aegis-replica-2bd29b,,2,3,
+1794413702.33,desired,,,2,2,2 -> 1 (agent)
+1794413702.82,draining,aegis-replica-55b790,,1,2,
+1794413703.85,removed,aegis-replica-55b790,,1,2,
+1794413790.9,desired,,,1,1,1 -> 3 (agent)
+1794413792.61,create_requested,aegis-replica-6d5a3b,,3,1,
+1794413792.62,create_requested,aegis-replica-a9b045,,3,1,
+1794413792.62,desired,,,3,1,3 -> 6 (agent)
+1794413796.16,create_requested,aegis-replica-618aaf,,6,1,
+1794413796.17,create_requested,aegis-replica-40910c,,6,1,
+1794413796.17,create_requested,aegis-replica-a18995,,6,1,
+1794413797.22,ready,aegis-replica-6d5a3b,5.33,6,2,
+1794413797.78,desired,,,6,2,6 -> 8 (agent)
+1794413800.15,create_requested,aegis-replica-069691,,8,2,
+1794413800.16,create_requested,aegis-replica-05d150,,8,2,
+1794413801.21,ready,aegis-replica-a9b045,8.61,8,4,
+1794413801.22,ready,aegis-replica-618aaf,7.06,8,4,
+1794413802.28,ready,aegis-replica-40910c,7.05,8,5,
+1794413803.17,ready,aegis-replica-a18995,7.02,8,6,
+1794413804.73,ready,aegis-replica-069691,5.6,8,7,
+1794413805.43,ready,aegis-replica-05d150,5.29,8,8,
+1794413846.99,desired,,,8,8,8 -> 6 (agent)
+1794413847.25,draining,aegis-replica-05d150,,6,8,
+1794413847.26,draining,aegis-replica-069691,,6,8,
+1794413848.15,removed,aegis-replica-05d150,,6,8,
+1794413849.15,removed,aegis-replica-069691,,6,7,
+1794413852.12,desired,,,6,6,6 -> 5 (agent)
+1794413852.25,draining,aegis-replica-a18995,,5,6,
+1794413853.16,removed,aegis-replica-a18995,,5,6,
+1794413869.4,desired,,,5,5,5 -> 4 (agent)
+1794413869.85,draining,aegis-replica-40910c,,4,5,
+1794413870.85,removed,aegis-replica-40910c,,4,5,
+1794413872.54,desired,,,4,4,4 -> 3 (agent)
+1794413872.74,draining,aegis-replica-618aaf,,3,4,
+1794413873.8,removed,aegis-replica-618aaf,,3,4,
+1794413876.7,desired,,,3,3,3 -> 2 (agent)
+1794413877.29,draining,aegis-replica-a9b045,,2,3,
+1794413878.31,removed,aegis-replica-a9b045,,2,3,
+1794413881.87,desired,,,2,2,2 -> 1 (agent)
+1794413882.19,draining,aegis-replica-6d5a3b,,1,2,
+1794413883.34,removed,aegis-replica-6d5a3b,,1,2,
+1794413931.56,desired,,,1,1,1 -> 3 (agent)
+1794413933.16,create_requested,aegis-replica-6ab613,,3,1,
+1794413933.16,create_requested,aegis-replica-8769c4,,3,1,
+1794413933.16,desired,,,3,1,3 -> 6 (agent)
+1794413933.29,desired,,,6,1,6 -> 9 (agent)
+1794413940.87,create_requested,aegis-replica-20dcda,,9,1,
+1794413940.87,create_requested,aegis-replica-76b91f,,9,1,
+1794413940.87,create_requested,aegis-replica-ba6236,,9,1,
+1794413940.88,create_requested,aegis-replica-f3d30a,,9,1,
+1794413940.88,create_requested,aegis-replica-5e3344,,9,1,
+1794413940.88,create_requested,aegis-replica-39a95d,,9,1,
+1794413942.16,ready,aegis-replica-6ab613,9.86,9,3,
+1794413942.16,ready,aegis-replica-8769c4,8.93,9,3,
+1794413943.31,ready,aegis-replica-20dcda,8.49,9,5,
+1794413943.31,ready,aegis-replica-76b91f,7.54,9,5,
+1794413945.37,ready,aegis-replica-ba6236,8.43,9,7,
+1794413945.38,ready,aegis-replica-f3d30a,6.76,9,7,
+1794413946.19,ready,aegis-replica-5e3344,6.61,9,8,
+1794413946.91,ready,aegis-replica-39a95d,6.06,9,9,
+1794413998.6,desired,,,9,9,9 -> 7 (agent)
+1794413998.72,draining,aegis-replica-39a95d,,7,9,
+1794413998.72,draining,aegis-replica-5e3344,,7,9,
+1794413999.69,removed,aegis-replica-39a95d,,7,9,
+1794414000.76,removed,aegis-replica-5e3344,,7,8,
+1794414001.74,desired,,,7,7,7 -> 6 (agent)
+1794414002.02,draining,aegis-replica-f3d30a,,6,7,
+1794414003.06,removed,aegis-replica-f3d30a,,6,7,
+1794414006.9,desired,,,6,6,6 -> 5 (agent)
+1794414007.42,draining,aegis-replica-ba6236,,5,6,
+1794414008.36,removed,aegis-replica-ba6236,,5,6,
+1794414012.05,desired,,,5,5,5 -> 4 (agent)
+1794414012.58,draining,aegis-replica-76b91f,,4,5,
+1794414013.62,removed,aegis-replica-76b91f,,4,5,
+1794414017.21,desired,,,4,4,4 -> 3 (agent)
+1794414017.68,draining,aegis-replica-20dcda,,3,4,
+1794414018.62,removed,aegis-replica-20dcda,,3,4,
+1794414034.44,desired,,,3,3,3 -> 2 (agent)
+1794414034.98,draining,aegis-replica-8769c4,,2,3,
+1794414035.82,removed,aegis-replica-8769c4,,2,3,
+1794414037.56,desired,,,2,2,2 -> 1 (agent)
+1794414038.02,draining,aegis-replica-6ab613,,1,2,
+1794414038.9,removed,aegis-replica-6ab613,,1,2,

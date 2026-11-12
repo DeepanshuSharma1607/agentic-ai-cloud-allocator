@@ -1,0 +1,13 @@
+# OPTIONAL baseline for the paper: the real Kubernetes HorizontalPodAutoscaler on the same Deployment.
+# Use it INSTEAD of the agent (run_live.py --no-agent --backend k8s), then apply:  kubectl apply -f infra/k8s/hpa.yaml
+# (infra/experiments/run_experiment.py --policy hpa applies the same rule itself, so this file is only for a by-the-book comparison.)
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata: {name: aegis-replica, namespace: aegis}
+spec:
+  scaleTargetRef: {apiVersion: apps/v1, kind: Deployment, name: aegis-replica}
+  minReplicas: 1
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource: {name: cpu, target: {type: Utilization, averageUtilization: 60}}

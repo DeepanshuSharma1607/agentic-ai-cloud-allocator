@@ -18,8 +18,11 @@ import streamlit as st
 
 import settings as S
 from frontend import charts
+from frontend import cluster_tab
 from frontend import data_access as D
+from infra import runtime as infra_runtime
 
+S.TICK_SECONDS = infra_runtime.tick_seconds()          # the tick length can be changed on the Device & Timer tab
 st.set_page_config(page_title="AegisCloud live", page_icon="📈", layout="wide")
 st.markdown("""
 <style>
@@ -34,7 +37,7 @@ h1 { font-weight: 700; letter-spacing: -0.02em; margin-bottom: 0; }
 </style>""", unsafe_allow_html=True)
 
 st.title("AegisCloud live")
-st.caption("Traffic in, LSTM forecast out, autoscaler decides. 1 tick = 5 real seconds = 1 simulated minute.")
+st.caption(f"Traffic in, LSTM forecast out, autoscaler decides. 1 tick = {S.TICK_SECONDS:g} real seconds = 1 simulated minute.")
 
 
 # ---------------------------------------------------------------- helpers
@@ -49,7 +52,7 @@ def fmt(v, d=0):
     return "n/a" if v is None or (isinstance(v, float) and pd.isna(v)) else f"{v:,.{d}f}"
 
 
-tab_live, tab_ctrl, tab_agent, tab_data = st.tabs(["Live", "Control", "Agent", "Data"])
+tab_live, tab_cluster, tab_device, tab_ctrl, tab_agent, tab_data = st.tabs(["Live", "Cluster", "Device & Timer", "Control", "Agent", "Data"])
 
 
 # ================================================================ LIVE
@@ -57,16 +60,17 @@ tab_live, tab_ctrl, tab_agent, tab_data = st.tabs(["Live", "Control", "Agent", "
 def live_panel(window):
     chips()
     live = D.read_csv(S.LIVE_CSV, window)
-    pred_all = D.read_csv(S.PRED_CSV)
+    pred_all = D.read_csv(S.PRED_CSV, max(window, 900))          # only the recent rows: the files grow all day
     pred = pred_all.tail(window)
     ticks = D.read_csv(S.AGENT_DIR / "agent_ticks.csv", window)
     if live.empty:
-        st.info("Waiting for the first tick. The collector writes one row every 5 seconds.")
+        st.info(f"Waiting for the first tick. The collector writes one row every {S.TICK_SECONDS:g} seconds.")
         return
     _, _, train_mean = D.training_range()
     last, lastp = live.iloc[-1], (pred.iloc[-1] if not pred.empty else None)
-    acc10 = D.accuracy(pred_all, D.read_csv(S.LIVE_CSV), 10)
-    acc20 = D.accuracy(pred_all, D.read_csv(S.LIVE_CSV), 20)
+    live_acc = D.read_csv(S.LIVE_CSV, max(window, 900))
+    acc10 = D.accuracy(pred_all, live_acc, 10)
+    acc20 = D.accuracy(pred_all, live_acc, 20)
 
     c = st.columns(6)
     c[0].metric("Traffic now", fmt(last["requests"]), help="requests in the last tick")
@@ -104,6 +108,13 @@ def live_panel(window):
 with tab_live:
     window = st.select_slider("Window (ticks)", options=[60, 120, 240, 360, 720, 1440], value=240, key="win")
     live_panel(window)
+
+
+# ================================================================ CLUSTER and DEVICE & TIMER (real replicas)
+with tab_cluster:
+    cluster_tab.render_cluster()
+with tab_device:
+    cluster_tab.render_device()
 
 
 # ================================================================ CONTROL

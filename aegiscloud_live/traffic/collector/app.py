@@ -23,9 +23,11 @@ from fastapi import FastAPI
 
 import seed as seed_mod
 import settings as S
+from obs import log as obslog
+from obs.middleware import RequestLogMiddleware
 
 log = logging.getLogger("collector")
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
+obslog.setup("collector")                       # shared logging: console + data/logs/collector.jsonl
 PCT = ["p50_ms", "p95_ms", "p99_ms"]
 
 
@@ -52,14 +54,14 @@ class Collector:
             snap = (await client.get(f"{S.URL_TARGET}/snapshot")).json()
         except Exception as e:
             self.errors += 1
-            log.warning("target app unreachable: %s", e)
+            obslog.warn_every("col-target", 30, log, "target app unreachable: %s", e)
             return None
         mode, planned = "", ""
         try:
             ls = (await client.get(f"{S.URL_LOADGEN}/status", timeout=0.7)).json()
             mode, planned = ls.get("active_label", ""), ls.get("last_tick", {}).get("planned", "")
-        except Exception:
-            pass
+        except Exception as e:
+            log.debug("sender status not available this tick: %s", e)
         for c in PCT:
             if snap.get(c) is None:
                 snap[c] = self.carry[c]
@@ -74,14 +76,16 @@ class Collector:
         self.minute += 1
         self.rows += 1
         self.last_row = row
+        log.info("tick %s (minute %s): %s requests, %s ok, %s errors, p95 %s ms",
+                 row["tick"], row["minute"], row["requests"], row["ok"], row["errors"], row["p95_ms"])
         try:
             r = await client.post(f"{S.URL_PREDICTION}/tick", json=row, timeout=10)
             self.prediction_ok = r.status_code == 200
             if not self.prediction_ok:
-                log.warning("prediction service answered %s: %s", r.status_code, r.text[:200])
+                obslog.warn_every("col-pred-bad", 30, log, "prediction service answered %s: %s", r.status_code, r.text[:200])
         except Exception as e:
             self.prediction_ok = False
-            log.warning("prediction service unreachable (row is saved, it will catch up): %s", e)
+            obslog.warn_every("col-pred", 30, log, "prediction service unreachable (row is saved, it will catch up): %s", e)
         return row
 
     @staticmethod
@@ -120,6 +124,7 @@ async def lifespan(app):
 
 
 app = FastAPI(title="AegisCloud collector", lifespan=lifespan)
+app.add_middleware(RequestLogMiddleware, name="collector")
 
 
 @app.get("/health")

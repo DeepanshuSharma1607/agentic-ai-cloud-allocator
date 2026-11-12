@@ -1,0 +1,4 @@
+# extra packages for the real-replica phase (pip install -r requirements-infra.txt)
+docker>=7.0          # Docker backend
+kubernetes>=29.0     # Kubernetes backend (only needed for --backend k8s)
+matplotlib>=3.8      # paper figures (infra/experiments/plot.py)

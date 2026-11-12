@@ -2,13 +2,15 @@
 import pandas as pd
 import plotly.graph_objects as go
 
+from infra import runtime as _runtime
+
 INK, TEAL, VIOLET, BLUE, RED, GRID, AMBER = "#16212B", "#0B7A75", "#7A4FB5", "#2F5D9B", "#C23B2E", "#D9DEE3", "#B8860B"
 
 
 def _base(fig, height, ytitle):
     fig.update_layout(height=height, margin=dict(l=8, r=8, t=28, b=8), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
                       font=dict(family="Public Sans, sans-serif", color=INK, size=12), hovermode="x unified",
-                      legend=dict(orientation="h", y=1.12, x=0), yaxis_title=ytitle, xaxis_title="minute (1 minute = 1 tick = 5 s)")
+                      legend=dict(orientation="h", y=1.12, x=0), yaxis_title=ytitle, xaxis_title=f"minute (1 minute = 1 tick = {_runtime.tick_seconds():g} s)")
     fig.update_xaxes(gridcolor=GRID, zeroline=False)
     fig.update_yaxes(gridcolor=GRID, zeroline=False, rangemode="tozero")
     return fig

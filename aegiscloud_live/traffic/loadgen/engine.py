@@ -16,6 +16,8 @@ from datetime import datetime
 
 import httpx
 
+from obs.rates import RateWindow
+
 import settings as S
 from traffic.loadgen.plans import Planner
 
@@ -41,7 +43,9 @@ class LoadEngine:
         self.segments: list[dict] = []
         self.finished: list[dict] = []
         self.next_id = 1
-        self.totals = {"planned": 0, "sent": 0, "ok": 0, "failed": 0}
+        self.totals = {"planned": 0, "sent": 0, "ok": 0, "failed": 0}   # sent/ok/failed are updated the moment each request starts or finishes
+        self.rates = {k: RateWindow() for k in ("sent", "ok", "failed")}  # per-second view of the same events (for the pages)
+        self.lat: list = []                                              # seconds taken by the most recent finished requests
         self.last = TickCounter(0, "idle", "idle", None)
         self.minute = None
         self._tasks: set = set()
@@ -109,7 +113,14 @@ class LoadEngine:
         return {"running": self.running, "base_plan": self.base, "active_label": label, "segments": segs,
                 "recent_segments": [{"id": s["id"], "status": s["status"], "plan": s["plan"]} for s in self.finished[-5:]],
                 "totals": self.totals, "last_tick": self.last.as_dict(), "minute": self.minute,
+                "in_flight": max(0, self.totals["sent"] - self.totals["ok"] - self.totals["failed"]),
+                "rates": {"window_s": 10, "sent_per_s": self.rates["sent"].rate(10), "ok_per_s": self.rates["ok"].rate(10),
+                          "failed_per_s": self.rates["failed"].rate(10), "avg_ms": self._avg_ms()},
                 "max_per_tick": S.MAX_REQUESTS_PER_TICK, "tick_seconds": S.TICK_SECONDS, "target": S.URL_TARGET}
+
+    def _avg_ms(self) -> float:
+        recent = self.lat[-100:]
+        return round(1000 * sum(recent) / len(recent), 1) if recent else 0.0
 
     # ------------------------------------------------------------------ logging
     @staticmethod
@@ -127,10 +138,10 @@ class LoadEngine:
                      {"wallclock": datetime.now().isoformat(timespec="seconds"), "event": kind, "detail": str(detail)})
 
     def _log_tick(self, c: TickCounter):
+        waiting = max(0, self.totals["sent"] - self.totals["ok"] - self.totals["failed"])
+        log.info("tick (minute %s): planned %s, started %s, answered ok %s, failed %s; %s requests still waiting overall [%s]",
+                 c.minute, c.planned, c.sent, c.ok, c.failed, waiting, c.label)
         self.totals["planned"] += c.planned
-        self.totals["sent"] += c.sent
-        self.totals["ok"] += c.ok
-        self.totals["failed"] += c.failed
         self._append(S.LOADGEN_DIR / "load_ticks.csv", ["wallclock", "minute", "label", "mode", "planned", "sent", "ok", "failed"],
                      {"wallclock": datetime.now().isoformat(timespec="seconds"), "minute": c.minute, "label": c.label,
                       "mode": c.mode, "planned": c.planned, "sent": c.sent, "ok": c.ok, "failed": c.failed})
@@ -138,14 +149,20 @@ class LoadEngine:
     # ------------------------------------------------------------------ sending
     async def _send(self, client, c: TickCounter):
         c.sent += 1
+        self.totals["sent"] += 1
+        self.rates["sent"].add()
+        t0 = time.perf_counter()
         try:
             r = await client.get(f"{S.URL_TARGET}/work")
-            if r.status_code == 200:
-                c.ok += 1
-            else:
-                c.failed += 1
+            good = r.status_code == 200
         except Exception:
-            c.failed += 1
+            good = False
+        self.lat.append(time.perf_counter() - t0)
+        del self.lat[:-300]
+        key = "ok" if good else "failed"
+        setattr(c, key, getattr(c, key) + 1)                 # the tick's own counter (kept for the CSV row)
+        self.totals[key] += 1                                # the running total: late answers are no longer lost
+        self.rates[key].add()
 
     async def _spread(self, client, n, c: TickCounter):
         loop = asyncio.get_running_loop()

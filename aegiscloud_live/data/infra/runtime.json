@@ -1,0 +1,9 @@
+{
+  "tick_seconds": 5.0,
+  "backend": "docker",
+  "effective_burn_ms": 1.22,
+  "capacity_per_tick": 234.4,
+  "capacity_source": "calibrated",
+  "max_replicas": 10,
+  "min_replicas": 1
+}

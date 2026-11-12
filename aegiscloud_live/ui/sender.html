@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AegisCloud - Request sender</title>
+<style>
+:root{--bg:#0e1116;--card:#171b22;--fg:#f2f4f7;--mut:#8b93a1;--ok:#3ecf8e;--warn:#f0b429;--bad:#f0645b;--acc:#5b9dff;--line:#262c36}
+@media(prefers-color-scheme:light){:root{--bg:#f4f6f9;--card:#fff;--fg:#14181f;--mut:#667085;--ok:#0f8a56;--warn:#a86a00;--bad:#c4281c;--acc:#1d62d6;--line:#dde1e7}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:system-ui,Segoe UI,sans-serif}
+.wrap{max-width:900px;margin:0 auto;padding:18px}
+h1{font-size:1.4rem;margin:6px 0 14px}h2{font-size:1.05rem;margin:0 0 10px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px;margin-bottom:14px}
+.mut{color:var(--mut);font-size:.92rem}
+label{display:block;margin:6px 0 4px}
+input[type=number]{width:140px;font-size:1.4rem;padding:8px 10px;border-radius:10px;border:1px solid var(--line);background:transparent;color:var(--fg)}
+input.small{width:90px;font-size:1rem}
+button{font-size:1rem;padding:10px 20px;border-radius:10px;border:1px solid var(--line);background:transparent;color:var(--fg);cursor:pointer}
+button.go{background:var(--ok);color:#06210f;border-color:var(--ok);font-weight:700}
+button.stop{background:var(--bad);color:#fff;border-color:var(--bad);font-weight:700}
+button.demo{background:var(--acc);color:#fff;border-color:var(--acc);font-weight:700}
+.chips button{padding:6px 12px;margin-right:6px}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:12px}
+#state{font-size:clamp(1.3rem,4vw,2rem);font-weight:800}#state.on{color:var(--ok)}
+.flow{display:flex;align-items:stretch;gap:8px;flex-wrap:wrap;margin-top:12px}
+.fb{flex:1;min-width:120px;border:1px solid var(--line);border-radius:12px;padding:10px 12px;text-align:center}
+.fb b{display:block;font-size:1.7rem;font-variant-numeric:tabular-nums}.fb span{color:var(--mut);font-size:.88rem}
+.arrow{align-self:center;color:var(--mut);font-size:1.3rem}
+.banner{margin-top:12px;padding:10px 14px;border-radius:12px;border:2px solid var(--ok);font-weight:600}
+.banner.warn{border-color:var(--warn)}.banner.bad{border-color:var(--bad)}.banner.idle{border-color:var(--line);color:var(--mut);font-weight:400}
+.bar{height:18px;border-radius:9px;background:var(--line);overflow:hidden;display:flex;margin-top:10px}
+.bar i{display:block;height:100%}
+#msg{min-height:1.3em;margin-top:8px;color:var(--bad)}
+#hint{color:var(--warn)}
+a{color:var(--mut)}
+</style></head><body><div class="wrap">
+<h1>AegisCloud &middot; Request sender</h1>
+
+<div class="card"><h2>Status</h2>
+  <div id="state">Loading...</div><div class="mut" id="sub"></div>
+  <h2 style="margin-top:16px">Where are my requests? <span class="mut">(per second, last 10 s)</span></h2>
+  <div class="flow">
+    <div class="fb"><span>Sender starts</span><b id="f1">-</b></div><div class="arrow">&rarr;</div>
+    <div class="fb"><span>Reach the front door</span><b id="f2">-</b></div><div class="arrow">&rarr;</div>
+    <div class="fb"><span>Answered OK</span><b id="f3">-</b></div><div class="arrow">&rarr;</div>
+    <div class="fb"><span>Failed</span><b id="f4">-</b></div>
+  </div>
+  <div class="banner idle" id="banner">Checking...</div>
+  <div class="mut" style="margin-top:10px" id="wait"></div>
+  <div class="mut" id="tot"></div>
+  <div class="mut" id="tick"></div>
+</div>
+
+<div class="card"><h2>Send requests</h2>
+  <label for="n">How many requests per tick?</label>
+  <input type="number" id="n" min="0" value="200">
+  <span class="mut" id="persec"></span>
+  <div id="hint"></div>
+  <div class="chips row"><button data-n="50">50</button><button data-n="200">200</button><button data-n="500">500</button><button data-n="1000">1000</button></div>
+  <div class="row"><label style="margin:0"><input type="checkbox" id="usedur"> Stop by itself after</label>
+    <input type="number" class="small" id="dur" min="5" value="60"> <span>seconds</span></div>
+  <div class="row"><button class="go" id="start">Start</button><button class="stop" id="stop">Stop</button></div>
+  <div id="msg"></div>
+  <div class="mut" id="cap"></div>
+</div>
+
+<div class="card"><h2>One-click demo</h2>
+  <div class="mut">Plays quiet &rarr; sudden spike &rarr; quiet again, so you can watch the system react. It replaces whatever is being sent now.</div>
+  <div class="row"><button class="demo" id="demo">Run demo</button><span id="demostate" class="mut"></span></div>
+  <div class="bar" id="bar"></div>
+</div>
+
+<div class="mut">Open: <a id="l1" href="#">request counter</a> &middot; <a id="l2" href="#">live logs</a> &middot; <a id="l3" href="#">dashboard</a></div>
+</div>
+<script>
+const $=id=>document.getElementById(id), host=location.hostname, fmt=n=>Number(n).toLocaleString(), f1=n=>(Math.round(n*10)/10).toString();
+$('l1').href='http://'+host+':8001'; $('l2').href='http://'+host+':8006'; $('l3').href='http://'+host+':8501';
+let tickS=5, maxTick=3000, peak=0, lastAsk=null, changedAt=0;
+const say=t=>{$('msg').textContent=t||''};
+async function api(path,method,body){
+  const r=await fetch(path,{method:method||'GET',headers:{'content-type':'application/json'},body:body?JSON.stringify(body):undefined});
+  const j=await r.json().catch(()=>({}));
+  if(!r.ok) throw new Error(typeof j.detail==='string'?j.detail:'The sender refused this request ('+r.status+')');
+  return j;
+}
+function diagnose(s,c){                                   // the same logic is on the counter page
+  if(!s) return {lvl:'warn',t:'The sender is not answering.'};
+  if(!c) return {lvl:'warn',t:'The front door is not reachable (port 8001): nothing can arrive.'};
+  const r=s.rates, ask=(s.last_tick.planned||0)/(s.tick_seconds||5);
+  if(lastAsk===null)lastAsk=ask;                         // first look: the sender may have been running for a while
+  else if(Math.abs(ask-lastAsk)>0.3*Math.max(ask,lastAsk,1)){lastAsk=ask;changedAt=Date.now()}
+  const settling=Date.now()-changedAt<15000;
+  if(r.sent_per_s<0.5&&s.in_flight<1&&c.rps<0.5) return {lvl:'idle',t:'Nothing is being sent and nothing is arriving.'};
+  if(!settling&&ask>5&&r.sent_per_s<0.7*ask) return {lvl:'bad',t:'You asked for '+f1(ask)+' per second but the sender only manages '+f1(r.sent_per_s)+'. The sender (or this PC) is the limit - lower the number.'};
+  if(!settling&&r.sent_per_s>5&&c.rps<0.6*r.sent_per_s) return {lvl:'bad',t:'The sender starts '+f1(r.sent_per_s)+' per second but only '+f1(c.rps)+' reach the front door. Requests are queueing on the way - this PC or the front door is too busy.'};
+  if(c.avg_ms>1500) return {lvl:'warn',t:'Answers are slow (about '+f1(c.avg_ms/1000)+' s each). The replicas are overloaded; the agent adds replicas only when it sees the load.'};
+  if(r.failed_per_s>0.5||c.failing_now>0) return {lvl:'bad',t:'Some requests are failing ('+f1(r.failed_per_s)+' per second).'};
+  if(s.in_flight>Math.max(50,5*r.sent_per_s)) return {lvl:'warn',t:fmt(s.in_flight)+' requests have not been answered yet.'};
+  return {lvl:'ok',t:'Everything is accounted for: what is sent arrives and is answered.'};
+}
+function showPerSec(){
+  const n=+$('n').value||0, ps=n/tickS;
+  $('persec').textContent=n?'  = about '+f1(ps)+' per second':'';
+  $('hint').textContent=(peak>5&&ps>1.5*peak)?'Careful: the front door has not handled more than about '+peak+' per second lately. This number may overload it.':'';
+}
+document.querySelectorAll('.chips button').forEach(b=>b.onclick=()=>{$('n').value=b.dataset.n;showPerSec()});
+$('n').oninput=showPerSec;
+$('start').onclick=async()=>{
+  say('');const n=Math.max(0,parseInt($('n').value)||0);
+  try{
+    if($('usedur').checked){const d=Math.max(5,parseFloat($('dur').value)||60);
+      await api('/stop','POST',{cancel_schedule:true});
+      await api('/schedule','POST',{plan:{mode:'fixed',n},duration_s:d,in_seconds:0});
+    }else await api('/start','POST',{mode:'fixed',n});
+    if(n>maxTick)say('Note: the safety cap is '+maxTick+' per tick, so it will send at most that.');
+  }catch(e){say(e.message)}
+};
+$('stop').onclick=async()=>{say('');try{await api('/stop','POST',{cancel_schedule:true})}catch(e){say(e.message)}};
+$('demo').onclick=async()=>{say('');try{await api('/demo','POST')}catch(e){say(e.message)}};
+const COLORS={'Quiet':'#3ecf8e','Spike':'#f0645b','Quiet again':'#3ecf8e'};
+function drawDemo(d){
+  const bar=$('bar');
+  if(!d.phases||!d.total_s){bar.innerHTML='';$('demostate').textContent='';return}
+  bar.innerHTML=d.phases.map(p=>`<i title="${p.name}: ${p.n}/tick" style="width:${p.duration_s/d.total_s*100}%;background:${COLORS[p.name]||'#5b9dff'};opacity:${d.running&&d.current===p.name?1:.45}"></i>`).join('');
+  $('demostate').textContent=d.running?('Running: '+d.current+' ('+Math.round(d.elapsed_s)+' of '+Math.round(d.total_s)+' s)'):'Finished or stopped';
+}
+async function poll(){
+  let s=null,c=null;
+  try{s=await api('/status')}catch(e){}
+  try{const r=await fetch('http://'+host+':8001/counter/data',{cache:'no-store'});if(r.ok)c=await r.json()}catch(e){}
+  const st=$('state');
+  if(!s){st.textContent='Cannot reach the sender';st.className='';return}
+  tickS=s.tick_seconds||5;maxTick=s.max_per_tick||3000;peak=c?c.peak_rps:0;
+  const sch=(s.active_label||'').startsWith('schedule'), on=s.base_plan.mode!=='idle'||sch;
+  st.textContent=on?'Sending':'Idle - not sending';st.className=on?'on':'';
+  $('sub').textContent=on?(sch?'Following a timed plan':'Plan: '+s.base_plan.mode+(s.base_plan.mode==='fixed'?' - '+s.base_plan.n+' per tick (about '+f1(s.base_plan.n/tickS)+' per second)':'')):'Press Start or Run demo.';
+  const r=s.rates;
+  $('f1').textContent=f1(r.sent_per_s);$('f3').textContent=f1(r.ok_per_s);$('f4').textContent=f1(r.failed_per_s);
+  $('f2').textContent=c?f1(c.rps):'?';
+  const d=diagnose(s,c);$('banner').textContent=d.t;$('banner').className='banner '+d.lvl;
+  $('wait').textContent='Not answered yet: '+fmt(s.in_flight)+(c?' at the sender, '+fmt(c.inflight)+' being handled at the front door':'')+' - average answer time seen by the sender: '+f1(r.avg_ms)+' ms.';
+  $('tot').textContent='Since the sender started: '+fmt(s.totals.sent)+' sent, '+fmt(s.totals.ok)+' answered OK, '+fmt(s.totals.failed)+' failed'+(c?'. The front door received '+fmt(c.total)+' since it started (it may have been running longer).':'.');
+  $('tick').textContent='This tick so far: asked for '+fmt(s.last_tick.planned)+', started '+fmt(s.last_tick.sent)+'.';
+  $('cap').textContent='Safety cap: never more than '+maxTick+' requests per tick. One tick = '+tickS+' seconds.';
+  showPerSec();
+  try{drawDemo(await api('/demo/status'))}catch(e){}
+}
+poll();setInterval(poll,1000);
+</script></body></html>

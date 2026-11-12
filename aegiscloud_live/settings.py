@@ -52,7 +52,7 @@ URL_PREDICTION = f"http://{HOST}:{PORT_PREDICTION}"
 
 # ------------------------------------------------------------------ safety limits for the load generator
 MAX_REQUESTS_PER_TICK = _env("AEGIS_MAX_PER_TICK", 3000, int)  # hard cap, whatever the dashboard asks for
-LOADGEN_AUTOSTART = _env("AEGIS_LOADGEN_AUTOSTART", "pattern")  # "pattern" = start daily-pattern traffic at launch, "" = idle
+LOADGEN_AUTOSTART = _env("AEGIS_LOADGEN_AUTOSTART", "pattern")  # "pattern" = start daily-pattern traffic at launch (the default), "off" = start idle. NOTE: an empty value ("") means "not set", so it gives the default
 
 # ------------------------------------------------------------------ demo target app (the "app" that receives the traffic)
 TARGET_SERVICE_MS = _env("AEGIS_SERVICE_MS", 30.0, float)       # average time one request takes

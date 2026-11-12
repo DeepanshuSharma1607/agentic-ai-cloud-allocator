@@ -15,11 +15,13 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, ConfigDict
 
 import settings as S
+from obs import log as obslog
+from obs.middleware import QUIET_DEFAULT, RequestLogMiddleware
 from prediction.engine import Engine
 from prediction.predictor import Predictor
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
 log = logging.getLogger("prediction")
+obslog.setup("prediction")                      # shared logging: console + data/logs/prediction.jsonl
 
 
 class Tick(BaseModel):
@@ -49,6 +51,7 @@ async def lifespan(app):
 
 
 app = FastAPI(title="AegisCloud prediction service", lifespan=lifespan)
+app.add_middleware(RequestLogMiddleware, name="prediction", quiet=QUIET_DEFAULT + ("/tick",))   # /tick arrives every tick; we log the forecast instead
 
 
 @app.get("/health")
@@ -70,6 +73,12 @@ def tick(row: Tick):
         eng.errors += 1
         log.exception("tick failed")
         raise HTTPException(status_code=422, detail=str(e))
+    if pred:
+        log.info("forecast at minute %s: now %s, +10 = %s, +20 = %s (drift z %s)", pred["minute"], pred["requests_now"],
+                 pred.get("forecast_h10"), pred.get("forecast_h20"), pred["drift_z"])
+    else:
+        obslog.warn_every("pred-nohist", 120, log, "no forecast yet: still collecting history (%d rows, need %d)",
+                          len(eng.hist), eng.predictor.rows_needed())
     return {"predicted": pred is not None, "prediction": pred}
 
 
