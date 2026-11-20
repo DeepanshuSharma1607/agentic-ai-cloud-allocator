@@ -7,6 +7,7 @@ The dashboard never invents numbers: charts come from the CSV files the other pa
 from __future__ import annotations
 
 import io
+import os
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -18,6 +19,7 @@ import seed as seed_mod
 import settings as S
 from agent import config as agent_cfg
 
+REFRESH_SECONDS = max(1.0, float(os.getenv("AEGIS_REFRESH_SECONDS", "5")))   # how often the live panels redraw (was 2-3 s: too heavy for one laptop)
 
 _cache = {}                                         # (path, tail) -> (file stamp, DataFrame): a file that did not change is not parsed again
 
@@ -61,6 +63,40 @@ def read_csv(path, tail=None):
     return df.copy()
 
 
+_count_cache = {}                                   # path -> (file stamp, rows)
+_bytes_cache = {}                                   # path -> (file stamp, bytes)
+
+
+def count_rows(path):
+    """Number of data rows of a CSV, counted once per file change (not at every refresh)."""
+    path = Path(path)
+    try:
+        stat = path.stat()
+    except FileNotFoundError:
+        return 0
+    stamp = (stat.st_mtime_ns, stat.st_size)
+    hit = _count_cache.get(str(path))
+    if hit and hit[0] == stamp:
+        return hit[1]
+    with open(path, "rb") as f:
+        rows = max(sum(1 for _ in f) - 1, 0)
+    _count_cache[str(path)] = (stamp, rows)
+    return rows
+
+
+def file_bytes(path):
+    """File content for a download button, re-read only when the file changed (it was re-read at every refresh before)."""
+    path = Path(path)
+    stat = path.stat()
+    stamp = (stat.st_mtime_ns, stat.st_size)
+    hit = _bytes_cache.get(str(path))
+    if hit and hit[0] == stamp:
+        return hit[1]
+    data = path.read_bytes()
+    _bytes_cache[str(path)] = (stamp, data)
+    return data
+
+
 def api(method, url, **kw):
     """(ok, json-or-error-text). Never raises."""
     try:
@@ -85,6 +121,7 @@ def services():
             return item[0], requests.get(f"{item[1]}/health", timeout=0.6).status_code == 200
         except Exception:
             return item[0], False
+
     with ThreadPoolExecutor(max_workers=4) as pool:
         return dict(pool.map(up, urls.items()))
 
@@ -105,8 +142,11 @@ def accuracy(pred: pd.DataFrame, live: pd.DataFrame, horizon: int, window=360):
     a = actual.loc[p[tgt]].to_numpy(dtype=float)
     f = p[col].to_numpy(dtype=float)
     now = p["requests_now"].to_numpy(dtype=float)
-    return {"wape": float(np.abs(f - a).sum() / max(a.sum(), 1e-9)),
-            "naive_wape": float(np.abs(now - a).sum() / max(a.sum(), 1e-9)), "n": int(len(p))}
+    return {
+        "wape": float(np.abs(f - a).sum() / max(a.sum(), 1e-9)),
+        "naive_wape": float(np.abs(now - a).sum() / max(a.sum(), 1e-9)),
+        "n": int(len(p)),
+    }
 
 
 def training_range():

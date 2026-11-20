@@ -13,12 +13,15 @@ Every node is a plain function:  node(state) -> dict of the keys it changes.
     8. alert_human        only if something is wrong: the LLM writes an urgent email, it is saved and sent
 """
 import csv
+import io
 import math
+import time
 
 import numpy as np
 import pandas as pd
 
 from agent import config as cfg
+from agent import health
 from agent import llm
 from agent import mailer
 
@@ -34,14 +37,35 @@ def replicas_for(demand, capacity, min_rep, max_rep):
     return int(min(max_rep, max(min_rep, need)))
 
 
+READ_ROWS = 300       # the nodes only ever look at the recent past (script = 10 rows, alert report = 60 rows + the forecasts made before them)
+_RUN_START = {"pred": 0, "actions": 0}   # file sizes when THIS run began: rows of an older run never count as "recent"
+
+
 def reset_files():
-    """Start every run with empty CSV files."""
+    """Clear the CSV files and saved alerts. Only used when you ask for it (python -m agent.run --fresh) and by the tests.
+    A normal start now APPENDS to the old files, so no history is lost."""
     cfg.DATA_DIR.mkdir(parents=True, exist_ok=True)
     cfg.PREDICTIONS_CSV.unlink(missing_ok=True)
     cfg.ACTIONS_CSV.unlink(missing_ok=True)
     cfg.ALERT_DIR.mkdir(parents=True, exist_ok=True)
     for old_alert in cfg.ALERT_DIR.glob("alert_*.txt"):
         old_alert.unlink()
+    mark_run_start()
+
+
+def mark_run_start():
+    """Remember where the files end right now. Everything the graph reads afterwards comes from after this point,
+    so appending to an old file cannot make the first minutes of a new run look at hours-old rows."""
+    for key, path in (("pred", cfg.PREDICTIONS_CSV), ("actions", cfg.ACTIONS_CSV)):
+        try:
+            _RUN_START[key] = path.stat().st_size
+        except FileNotFoundError:
+            _RUN_START[key] = 0
+
+
+def _clean(value):
+    """One CSV row must stay one line (an LLM reason with a line break would otherwise break the tail reader)."""
+    return " ".join(value.split()) if isinstance(value, str) else value
 
 
 def append_row(path, cols, row):
@@ -50,11 +74,42 @@ def append_row(path, cols, row):
         w = csv.DictWriter(f, fieldnames=cols)
         if new_file:
             w.writeheader()
-        w.writerow(row)
+        w.writerow({k: _clean(v) for k, v in row.items()})
 
 
-def read_predictions():
-    return pd.read_csv(cfg.PREDICTIONS_CSV)
+def _tail_rows(path, cols, rows, floor=0):
+    """The last `rows` rows of a growing CSV, read from the END of the file (never the whole file) and never from
+    before byte `floor`. Returns a DataFrame with the normal columns (empty if there is nothing)."""
+    empty = pd.DataFrame(columns=cols)
+    try:
+        size = path.stat().st_size
+    except FileNotFoundError:
+        return empty
+    if size <= floor:
+        return empty
+    block, start, data = 8192, size, b""
+    with open(path, "rb") as f:
+        while start > floor and data.count(b"\n") <= rows + 1:
+            start = max(floor, start - block)
+            f.seek(start)
+            data = f.read(size - start)
+            block *= 2
+    lines = data.decode("utf-8", errors="replace").splitlines()
+    if start > floor and lines:
+        lines = lines[1:]                                              # the first line is probably cut in half
+    lines = [ln for ln in lines if ln.strip() and not ln.startswith(cols[0] + ",")][-rows:]
+    if not lines:
+        return empty
+    return pd.read_csv(io.StringIO("\n".join(lines)), names=cols, header=None, on_bad_lines="skip")
+
+
+def read_predictions(rows=READ_ROWS):
+    """Recent rows of agent_ticks.csv for THIS run. Reading is O(rows), not O(file), so an ever-growing log never slows the agent."""
+    return _tail_rows(cfg.PREDICTIONS_CSV, PRED_COLS, rows, _RUN_START["pred"])
+
+
+def read_actions(rows=20):
+    return _tail_rows(cfg.ACTIONS_CSV, ACTION_COLS, rows, 0)          # recent decisions of any run are fine context for the LLM
 
 
 # ================================================================ node 1
@@ -142,9 +197,7 @@ def report_table(df, rows_wanted):
 
 def recent_actions_lines(n):
     """The last n rows of actions.csv as sentences."""
-    if not cfg.ACTIONS_CSV.exists():
-        return ["none yet"]
-    rows = pd.read_csv(cfg.ACTIONS_CSV).tail(n)
+    rows = read_actions(n)
     return [f"minute {a.minute}: {a.mode}, replicas {a.replicas_before} -> {a.applied} ({a.action})"
             for a in rows.itertuples()] or ["none yet"]
 
@@ -212,7 +265,7 @@ def set_replicas(n):
     pass
 
 
-def alert_reason_for(state, decision, applied, failures):
+def alert_reason_for(state, decision, applied, failures, health_reason=None):
     """Returns a sentence if a human must be told, else None. Plain code, no LLM."""
     if state.get("force_alert"):                                       # tests only: used by test/graph_tester.py, ignores the cooldown
         return "TEST ALERT: forced by graph_tester.py"
@@ -232,6 +285,8 @@ def alert_reason_for(state, decision, applied, failures):
         return f"traffic was above capacity for {cfg.ALERT_MISS_MINUTES} minutes in a row"
     if applied >= state["max_replicas"] and state["traffic_now"] > applied * state["capacity"]:
         return f"already at the maximum of {applied} replicas and traffic is still above capacity"
+    if health_reason:                                                  # what the gateway REALLY measured (agent/health.py)
+        return health_reason
     return None
 
 
@@ -255,8 +310,9 @@ def apply_and_log(state):
         failures += 1                                              # another LLM failure in a row
     elif state["mode"] != cfg.MODE_AUTO:
         failures = 0                                               # the LLM answered, start counting again
-    alert = alert_reason_for(state, decision, applied, failures)
-    out = {"applied": applied, "replicas": applied, "alert_reason": alert or "", "llm_failures": failures}
+    health_run, health_reason = health.check(state.get("health_run"))   # real latency / failures, counted every tick (cooldown is applied below)
+    alert = alert_reason_for(state, decision, applied, failures, health_reason)
+    out = {"applied": applied, "replicas": applied, "alert_reason": alert or "", "llm_failures": failures, "health_run": health_run}
     if alert:
         out["last_alert_minute"] = state["minute"]                 # start the alert cooldown now
     if applied > before:
@@ -285,8 +341,9 @@ def alert_human(state):
     email = llm.write_alert_email(reason, context)
 
     attachments = [("last_hour_predictions.csv", last_hour.to_csv(index=False))]
-    if cfg.ACTIONS_CSV.exists():
-        attachments.append(("last_actions.csv", pd.read_csv(cfg.ACTIONS_CSV).tail(20).to_csv(index=False)))
+    recent_actions = read_actions(20)
+    if not recent_actions.empty:
+        attachments.append(("last_actions.csv", recent_actions.to_csv(index=False)))
 
     if cfg.ALERT_SEND_EMAIL:
         ok, message = mailer.send_email(email["subject"], email["body"], attachments)
@@ -295,6 +352,6 @@ def alert_human(state):
     status = message if ok else f"saved to file only: {message}"
 
     cfg.ALERT_DIR.mkdir(parents=True, exist_ok=True)
-    path = cfg.ALERT_DIR / f"alert_{minute}.txt"
+    path = cfg.ALERT_DIR / f"alert_{minute}_{time.strftime('%Y%m%d_%H%M%S')}.txt"      # unique: an older alert is never overwritten
     path.write_text(f"Subject: {email['subject']}\nStatus: {status}\n\n{email['body']}\n", encoding="utf-8")
     return {"alert_status": f"{status} ({path.name})"}

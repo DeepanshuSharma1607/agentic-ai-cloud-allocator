@@ -12,7 +12,7 @@ import settings as S
 
 AGENT_CODE_DIR = Path(__file__).resolve().parent
 load_dotenv(S.ROOT / ".env")                        # keys can live in the project root .env ...
-load_dotenv(AGENT_CODE_DIR / ".env")                # ... or in agent/.env (this one wins)
+load_dotenv(AGENT_CODE_DIR / ".env", override=True) # ... or in agent/.env (this one really wins now: before, the first file read won)
 DATA_DIR = S.AGENT_DIR                              # data/agent/
 PREDICTIONS_CSV = DATA_DIR / "agent_ticks.csv"      # one row per tick: traffic, forecasts, replicas (the agent's own log)
 ACTIONS_CSV = DATA_DIR / "actions.csv"              # one row per decision (last node)
@@ -60,6 +60,11 @@ ALERT_COOLDOWN = 120       # minutes between two alerts (stops email spam)
 ALERT_MISS_MINUTES = 2    # "overloaded for this many minutes in a row"
 ALERT_LOG_MINUTES = 60    # the email carries the last hour of logs
 ESCALATE_MIN_LOAD = 0.9   # an LLM "escalate" only becomes an alert if max(traffic, forecast) is above 90% of capacity (first guess, tune it)
+HEALTH_ALERTS = True      # ALSO alert on the REAL service health (gateway p95 / errors), not only on the capacity numbers above
+ALERT_P95_MS = 500.0      # p95 latency goal (same as the device profile SLO)
+ALERT_P95_TICKS = 6       # alert when p95 stays above the goal for this many busy ticks in a row (6 ticks = 30 real seconds)
+ALERT_ERROR_RATE = 0.05   # ... or when more than 5% of the requests fail
+ALERT_ERROR_TICKS = 3     # ... for this many busy ticks in a row
 ALERT_SEND_EMAIL = True  # False = only save the email in data/alerts/. True = also send it by SMTP
 SMTP_HOST = "smtp.gmail.com"
 SMTP_PORT = 465           # SSL

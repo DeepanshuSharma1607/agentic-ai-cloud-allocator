@@ -222,7 +222,7 @@ async def infra_calibrate():
         st.cal.update(running=True, message="starting", result=None)
         try:
             st.cal["result"] = await calibrate.run(st.mgr, lambda m: st.cal.__setitem__("message", m))
-            st.cal["message"] = "done"
+            st.cal["message"] = "done - press Apply (Device & Timer) so the agent uses the measured number"
         except Exception as e:
             st.cal["message"] = f"failed: {type(e).__name__}: {e}"
         finally:

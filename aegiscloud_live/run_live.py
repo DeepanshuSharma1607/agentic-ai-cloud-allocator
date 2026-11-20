@@ -77,9 +77,23 @@ class Stack:
                     "--server.headless", "true", "--browser.gatherUsageStats", "false"], None
         raise KeyError(name)
 
+    @staticmethod
+    def open_log(name):
+        """Raw console log of one part. APPENDS (a restart used to wipe it); it is moved aside only when it passes 10 MB."""
+        path = S.LOG_DIR / f"{name}.log"
+        try:
+            if path.exists() and path.stat().st_size > 10_000_000:
+                path.replace(path.with_suffix(".log.1"))
+        except OSError:
+            pass
+        log = open(path, "a", encoding="utf-8")
+        log.write(f"\n===== {name} started {time.strftime('%Y-%m-%d %H:%M:%S')} =====\n")
+        log.flush()
+        return log
+
     def start(self, name, keep_files=False, wait=True):
         cmd, health = self.cmd(name, keep_files)
-        log = open(S.LOG_DIR / f"{name}.log", "w", encoding="utf-8")
+        log = self.open_log(name)
         proc = subprocess.Popen(cmd, cwd=ROOT, env=self.env(), stdout=log, stderr=subprocess.STDOUT)
         with self.lock:
             self.procs[name] = (proc, log)

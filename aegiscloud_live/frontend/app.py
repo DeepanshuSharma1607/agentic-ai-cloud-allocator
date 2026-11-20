@@ -23,28 +23,105 @@ from frontend import data_access as D
 from infra import runtime as infra_runtime
 
 S.TICK_SECONDS = infra_runtime.tick_seconds()          # the tick length can be changed on the Device & Timer tab
-st.set_page_config(page_title="AegisCloud live", page_icon="📈", layout="wide")
+st.set_page_config(page_title="AegisCloud Live", layout="wide")
+
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;600;700&display=swap');
-html, body, [class*="st-"], .stMarkdown { font-family: 'Public Sans', sans-serif; }
-[data-testid="stMetricValue"] { font-variant-numeric: tabular-nums; font-weight: 700; }
-[data-testid="stMetricLabel"] p { font-size: 0.82rem; }
-.block-container { padding-top: 1.4rem; max-width: 1400px; }
-h1 { font-weight: 700; letter-spacing: -0.02em; margin-bottom: 0; }
-.chip { display:inline-block; padding:2px 10px; margin:0 6px 4px 0; border-radius:3px; font-size:0.82rem; border:1px solid #C5CCD3; }
-.chip.up { background:#E2F1EF; border-color:#0B7A75; } .chip.down { background:#F8E4E1; border-color:#C23B2E; }
+@import url('https://fonts.googleapis.com/css2?family=Archivo+Narrow:wght@600;700&family=Archivo:wght@400;500;600;700;800&display=swap');
+
+html, body, [class*="st-"], .stMarkdown {
+  font-family: "Helvetica Neue", "Archivo", Helvetica, Arial, sans-serif;
+  color: #111111;
+}
+.stApp {
+  background-color: #FFFFFF;
+}
+.block-container {
+  padding-top: 1.8rem;
+  padding-bottom: 3rem;
+  max-width: 1360px;
+}
+h1, h2, h3 {
+  font-family: "Helvetica Neue", "Archivo", Helvetica, Arial, sans-serif !important;
+  font-weight: 800 !important;
+  letter-spacing: -0.025em !important;
+  color: #111111 !important;
+}
+[data-testid="stMetric"] {
+  background: #F7F7F8;
+  border: 1px solid #E2E2E6;
+  border-radius: 0px;
+  padding: 14px 16px;
+}
+[data-testid="stMetricValue"] {
+  font-family: "Helvetica Neue", "Archivo", Helvetica, Arial, sans-serif !important;
+  font-variant-numeric: tabular-nums;
+  font-weight: 800 !important;
+  color: #111111 !important;
+}
+[data-testid="stMetricLabel"] p {
+  font-size: 0.78rem !important;
+  color: #5A5A60 !important;
+  font-weight: 600 !important;
+}
+[data-testid="stTabs"] [role="tablist"] {
+  gap: 1.5rem;
+  border-bottom: 1px solid #111111;
+  margin-bottom: 1.2rem;
+}
+[data-testid="stTabs"] button[role="tab"] {
+  font-weight: 600;
+  color: #5A5A60;
+  padding-bottom: 0.7rem;
+  border-radius: 0px !important;
+  transition: color 0.15s ease;
+}
+[data-testid="stTabs"] button[role="tab"][aria-selected="true"] {
+  color: #111111;
+  border-bottom: 3px solid #FF4F00 !important;
+}
+.stButton > button, .stDownloadButton > button {
+  border-radius: 0px !important;
+  font-weight: 600 !important;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease !important;
+}
+.stTextInput input, .stNumberInput input, .stSelectbox > div > div {
+  border-radius: 0px !important;
+}
+.svc-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  align-items: center;
+  padding: 10px 0 14px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid #E2E2E6;
+  font-size: 0.8rem;
+}
+.svc-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  color: #111111;
+}
+.svc-up { color: #111111; font-family: "Archivo Narrow", "Helvetica Neue", sans-serif; font-weight: 700; }
+.svc-down { color: #FF4F00; font-family: "Archivo Narrow", "Helvetica Neue", sans-serif; font-weight: 700; }
 </style>""", unsafe_allow_html=True)
 
-st.title("AegisCloud live")
-st.caption(f"Traffic in, LSTM forecast out, autoscaler decides. 1 tick = {S.TICK_SECONDS:g} real seconds = 1 simulated minute.")
+st.title("AegisCloud Live")
+st.caption(f"Traffic in, LSTM forecast out, autoscaler decides ahead of spikes · 1 tick = {S.TICK_SECONDS:g} real seconds = 1 simulated minute.")
 
 
 # ---------------------------------------------------------------- helpers
 def chips():
     status = D.services()
-    st.markdown("".join(f'<span class="chip {"up" if ok else "down"}">{name}: {"up" if ok else "DOWN"}</span>' for name, ok in status.items()),
-                unsafe_allow_html=True)
+    items = "".join(
+        f'<span class="svc-item">{name.title()} '
+        f'<span class="{"svc-up" if ok else "svc-down"}">· {"Up" if ok else "Down"}</span></span>'
+        for name, ok in status.items()
+    )
+    st.markdown(f'<div class="svc-strip">{items}</div>', unsafe_allow_html=True)
     return status
 
 
@@ -52,11 +129,13 @@ def fmt(v, d=0):
     return "n/a" if v is None or (isinstance(v, float) and pd.isna(v)) else f"{v:,.{d}f}"
 
 
-tab_live, tab_cluster, tab_device, tab_ctrl, tab_agent, tab_data = st.tabs(["Live", "Cluster", "Device & Timer", "Control", "Agent", "Data"])
+tab_live, tab_cluster, tab_device, tab_ctrl, tab_agent, tab_data = st.tabs(
+    ["01 Live", "02 Cluster", "03 Device & Timer", "04 Control", "05 Agent", "06 Data"]
+)
 
 
 # ================================================================ LIVE
-@st.fragment(run_every=2)
+@st.fragment(run_every=D.REFRESH_SECONDS)
 def live_panel(window):
     chips()
     live = D.read_csv(S.LIVE_CSV, window)
@@ -73,33 +152,59 @@ def live_panel(window):
     acc20 = D.accuracy(pred_all, live_acc, 20)
 
     c = st.columns(6)
-    c[0].metric("Traffic now", fmt(last["requests"]), help="requests in the last tick")
-    c[1].metric("Forecast +10 min", fmt(None if lastp is None else lastp.get("forecast_h10")),
-                None if lastp is None or pd.isna(lastp.get("forecast_h10")) else f"{lastp['forecast_h10'] - last['requests']:+.0f} vs now")
+    c[0].metric("Traffic now", fmt(last["requests"]), help="Requests in the last tick")
+    c[1].metric(
+        "Forecast +10 min",
+        fmt(None if lastp is None else lastp.get("forecast_h10")),
+        None if lastp is None or pd.isna(lastp.get("forecast_h10")) else f"{lastp['forecast_h10'] - last['requests']:+.0f} vs now",
+    )
     c[2].metric("Forecast +20 min", fmt(None if lastp is None else lastp.get("forecast_h20")))
-    c[3].metric("Forecast error +10", "n/a" if not acc10 else f"{100 * acc10['wape']:.0f}%",
-                None if not acc10 else f"naive {100 * acc10['naive_wape']:.0f}%", delta_color="off",
-                help="WAPE over forecasts whose time has already come. 'naive' = assuming traffic stays as it is now. Lower is better; the model should beat naive.")
-    c[4].metric("Replicas", "n/a" if ticks.empty else int(ticks["replicas"].iloc[-1]),
-                None if ticks.empty else f"capacity {ticks['replicas'].iloc[-1] * D.capacity_per_replica():,.0f}", delta_color="off")
+    c[3].metric(
+        "Forecast error +10",
+        "n/a" if not acc10 else f"{100 * acc10['wape']:.0f}%",
+        None if not acc10 else f"naive {100 * acc10['naive_wape']:.0f}%",
+        delta_color="off",
+        help="WAPE over forecasts whose time has already come. 'naive' = assuming traffic stays as it is now. Lower is better.",
+    )
+    c[4].metric(
+        "Replicas",
+        "n/a" if ticks.empty else int(ticks["replicas"].iloc[-1]),
+        None if ticks.empty else f"capacity {ticks['replicas'].iloc[-1] * D.capacity_per_replica():,.0f}",
+        delta_color="off",
+    )
     src = None if lastp is None else lastp.get("history_source")
-    c[5].metric("History used", "n/a" if src is None else ("live data" if src == "live" else "seed + live"),
-                help="'seed + live': the day of history behind 'yesterday' features still includes your training data (warm-up).")
+    c[5].metric(
+        "History used",
+        "n/a" if src is None else ("100% live" if src == "live" else "seed + live"),
+        help="'seed + live': the 24h history behind 'yesterday' features still includes training data (warm-up).",
+    )
 
     if lastp is not None and float(lastp.get("drift_z", 0) or 0) > 3:
-        st.warning(f"Live inputs look unlike the training data (`{lastp['drift_metric']}` is {lastp['drift_z']} standard deviations away). "
-                   "Forecasts may be unreliable until live traffic resembles the training range.")
+        st.warning(
+            f"Live inputs look unlike the training data (`{lastp['drift_metric']}` is {lastp['drift_z']} standard deviations away). "
+            "Forecasts may be unreliable until live traffic resembles the training range."
+        )
     lo, hi, _ = D.training_range()
     if last["requests"] > hi * 1.1:
         st.warning(f"Traffic ({last['requests']:.0f}/tick) is above anything in the training data (max {hi:.0f}). The LSTM may under-predict.")
 
     st.plotly_chart(charts.forecast_chart(live, pred), width="stretch", key="fc")
     a, b = st.columns(2)
-    a.plotly_chart(charts.lines(live, ["p50_ms", "p95_ms", "p99_ms"], [("p50", charts.TEAL), ("p95", charts.AMBER), ("p99", charts.RED)],
-                                ytitle="latency (ms)"), width="stretch", key="lat")
-    b.plotly_chart(charts.lines(live, ["app_cpu_pct", "host_cpu_pct", "app_mem_mb"],
-                                [("app CPU %", charts.BLUE), ("host CPU %", charts.INK), ("app memory MB", charts.VIOLET)],
-                                ytitle="CPU % / MB"), width="stretch", key="res")
+    a.plotly_chart(
+        charts.lines(live, ["p50_ms", "p95_ms", "p99_ms"], [("p50", charts.INK), ("p95", charts.MUTED), ("p99", charts.ORANGE)], ytitle="latency (ms)"),
+        width="stretch",
+        key="lat",
+    )
+    b.plotly_chart(
+        charts.lines(
+            live,
+            ["app_cpu_pct", "host_cpu_pct", "app_mem_mb"],
+            [("App CPU %", charts.ORANGE), ("Host CPU %", charts.INK), ("App memory MB", charts.MUTED)],
+            ytitle="CPU % / MB",
+        ),
+        width="stretch",
+        key="res",
+    )
     st.plotly_chart(charts.replicas_chart(ticks, D.capacity_per_replica()), width="stretch", key="rep")
     if acc20:
         st.caption(f"Forecast error +20 min: {100 * acc20['wape']:.0f}% (naive {100 * acc20['naive_wape']:.0f}%), measured on {acc20['n']} matured forecasts.")
@@ -121,8 +226,12 @@ with tab_device:
 def plan_editor(prefix, allow_idle=False):
     """Widgets for one plan; returns the plan dict."""
     lo_t, hi_t, mean_t = D.training_range()
-    modes = {"Daily pattern (like the training data)": "pattern", "Fixed number per tick": "fixed",
-             "Random between two numbers": "random", "Replay the real training rows": "replay"}
+    modes = {
+        "Daily pattern (like the training data)": "pattern",
+        "Fixed number per tick": "fixed",
+        "Random between two numbers": "random",
+        "Replay the real training rows": "replay",
+    }
     label = st.selectbox("Traffic type", list(modes), key=f"{prefix}_mode")
     mode, plan = modes[label], {}
     plan["mode"] = mode
@@ -150,9 +259,8 @@ def plan_editor(prefix, allow_idle=False):
 
 with tab_ctrl:
     left, right = st.columns([1, 1], gap="large")
-
     with left:
-        st.subheader("Send traffic now")
+        st.subheader("01. Send traffic now")
         base_plan = plan_editor("base")
         b1, b2 = st.columns(2)
         if b1.button("Start / apply", type="primary", width="stretch"):
@@ -163,7 +271,7 @@ with tab_ctrl:
             st.success("Stopped. Idle ticks are still recorded as 0 requests.") if ok else st.error(res)
 
     with right:
-        st.subheader("Timer: send this much, at this time")
+        st.subheader("02. Timer: send this much, at this time")
         when = st.radio("Start", ["after a delay", "at a clock time"], horizontal=True, key="when")
         if when == "after a delay":
             delay_min = st.number_input("Start in (minutes)", 0.0, 1440.0, 1.0, 0.5, key="delay")
@@ -182,7 +290,7 @@ with tab_ctrl:
 
     st.divider()
 
-    @st.fragment(run_every=2)
+    @st.fragment(run_every=D.REFRESH_SECONDS)
     def sender_status():
         ok, s = D.api("GET", f"{S.URL_LOADGEN}/status", timeout=2)
         if not ok:
@@ -208,9 +316,8 @@ with tab_ctrl:
             st.caption("No scheduled segments.")
 
     sender_status()
-
     st.divider()
-    st.subheader("Collector")
+    st.subheader("03. Collector")
     ok, cs = D.api("GET", f"{S.URL_COLLECTOR}/status", timeout=2)
     if ok:
         c1, c2 = st.columns([3, 1])
@@ -228,19 +335,19 @@ with tab_ctrl:
 
 # ================================================================ AGENT
 with tab_agent:
-    @st.fragment(run_every=3)
+    @st.fragment(run_every=D.REFRESH_SECONDS)
     def agent_panel():
-        acts = D.read_csv(S.AGENT_DIR / "actions.csv")
-        ticks = D.read_csv(S.AGENT_DIR / "agent_ticks.csv")
-        if ticks.empty:
+        acts = D.read_csv(S.AGENT_DIR / "actions.csv")                     # small file, parsed again only when it changes
+        n_ticks = D.count_rows(S.AGENT_DIR / "agent_ticks.csv")            # counted once per file change: the file now keeps growing across runs
+        if n_ticks == 0:
             st.info("The agent has not written anything yet. Start it with `python run_all.py` or `python -m agent.run`.")
             return
         c = st.columns(4)
-        c[0].metric("Ticks handled", len(ticks))
+        c[0].metric("Ticks handled", f"{n_ticks:,}")
         c[1].metric("Decisions logged", len(acts))
         changes = 0 if acts.empty or "action" not in acts else int(acts["action"].isin(["scale_up", "scale_down"]).sum())
         c[2].metric("Replica changes", changes)
-        alerts = sorted((S.AGENT_DIR / "alerts").glob("alert_*.txt"))
+        alerts = sorted((S.AGENT_DIR / "alerts").glob("alert_*.txt"), key=lambda f: f.stat().st_mtime)
         c[3].metric("Alerts", len(alerts))
         st.markdown("**Latest decisions**")
         st.dataframe(acts.tail(25).iloc[::-1] if not acts.empty else acts, width="stretch", hide_index=True)
@@ -254,15 +361,20 @@ with tab_agent:
 # ================================================================ DATA
 with tab_data:
     st.caption("Everything is plain CSV, so you can open it in Excel or load it into a notebook.")
-    files = [("Seed (your training data)", S.SEED_CSV), ("Live metrics (collector)", S.LIVE_CSV), ("Predictions (LSTM)", S.PRED_CSV),
-             ("Agent ticks", S.AGENT_DIR / "agent_ticks.csv"), ("Agent actions", S.AGENT_DIR / "actions.csv"),
-             ("Sender ticks", S.LOADGEN_DIR / "load_ticks.csv"), ("Sender events", S.LOADGEN_DIR / "events.csv")]
+    files = [
+        ("Seed (your training data)", S.SEED_CSV),
+        ("Live metrics (collector)", S.LIVE_CSV),
+        ("Predictions (LSTM)", S.PRED_CSV),
+        ("Agent ticks", S.AGENT_DIR / "agent_ticks.csv"),
+        ("Agent actions", S.AGENT_DIR / "actions.csv"),
+        ("Sender ticks", S.LOADGEN_DIR / "load_ticks.csv"),
+        ("Sender events", S.LOADGEN_DIR / "events.csv"),
+    ]
     for name, path in files:
         a, b, c = st.columns([3, 1, 1])
         a.write(f"**{name}**  \n`{path.relative_to(S.ROOT) if path.is_relative_to(S.ROOT) else path}`")
         if path.exists() and path.stat().st_size:
-            rows = max(sum(1 for _ in open(path, "rb")) - 1, 0)
-            b.write(f"{rows:,} rows")
-            c.download_button("Download", path.read_bytes(), file_name=path.name, key=f"dl_{path.name}_{name}")
+            b.write(f"{D.count_rows(path):,} rows")
+            c.download_button("Download", D.file_bytes(path), file_name=path.name, key=f"dl_{path.name}_{name}")
         else:
             b.write("not created yet")

@@ -7,11 +7,11 @@ run.py - starts the agent. It runs the LangGraph ONCE PER NEW TICK of the live s
     python -m agent.run --email                  # also SEND alert emails (needs the EMAIL_ lines in .env)
     python -m agent.run --quiet                  # print only ticks with an LLM call, a replica change or an alert
     python -m agent.run --max-ticks 100          # stop after 100 ticks
-    python -m agent.run --keep-files             # do not clear data/agent/ at start
+    python -m agent.run --fresh                  # clear data/agent/ at start (default: APPEND to the old files)
 
 Run it from the project root, after the other services are up (python run_all.py starts everything).
 Ctrl+C stops it safely; the CSV files are already written and a summary is printed.
-Output files (data/agent/): agent_ticks.csv, actions.csv, alerts/alert_<minute>.txt
+Output files (data/agent/): agent_ticks.csv, actions.csv, alerts/alert_<minute>_<time>.txt
 """
 import argparse
 import sys
@@ -41,7 +41,8 @@ def parse_args():
     p.add_argument("--provider", choices=llm.PROVIDERS, help="fake, gemini or mistral (default: LLM_PROVIDER in config.py)")
     p.add_argument("--email", action="store_true", help="really send alert emails")
     p.add_argument("--quiet", action="store_true", help="print only ticks with an LLM call, a replica change or an alert")
-    p.add_argument("--keep-files", action="store_true", help="keep the CSV files of the previous run")
+    p.add_argument("--fresh", action="store_true", help="clear the CSV files and saved alerts of earlier runs first (default: append)")
+    p.add_argument("--keep-files", action="store_true", help="kept for old scripts: appending is now the default, so this changes nothing")
     p.add_argument("--metrics-port", type=positive_int, default=8000, help="Prometheus exporter port (default: 8000)")
     p.add_argument("--no-metrics", action="store_true", help="disable the Prometheus metrics endpoint")
     p.add_argument("--test-alert", action="store_true", help="force exactly one test alert on the first tick")
@@ -73,10 +74,13 @@ def main():
     from agent import graph, nodes                    # imported here so a wrong option fails fast
     from agent.feed import LiveFeed
 
-    if not a.keep_files:
-        nodes.reset_files()
+    if a.fresh and not a.keep_files:
+        nodes.reset_files()                                  # only when asked: history is never deleted by a normal (re)start
     cfg.DATA_DIR.mkdir(parents=True, exist_ok=True)
     cfg.ALERT_DIR.mkdir(parents=True, exist_ok=True)
+    nodes.mark_run_start()                                   # rows of earlier runs stay in the files but do not count as "recent"
+    alog.info("agent run started (%s files, provider %s, emails %s)", "fresh" if a.fresh else "appending to existing",
+              cfg.LLM_PROVIDER, "ON" if cfg.ALERT_SEND_EMAIL else "OFF")
 
     feed = LiveFeed()
     print(f"Waiting for the prediction service ({feed.url}) ...")
@@ -150,6 +154,8 @@ def main():
         interrupted = True
         print("\nStopped with Ctrl+C.")
 
+    alog.info("agent run ended: %s ticks, %s skipped, %s LLM calls, %s replica changes, %s alerts",
+              stats["ticks"], stats["skipped"], stats["llm_calls"], stats["scale_events"], stats["alerts"])
     print("\n===== summary =====")
     print(f"ticks processed         : {stats['ticks']}  (skipped because the agent was slower than the data: {stats['skipped']})")
     print(f"LLM calls               : {stats['llm_calls']}  (provider: {cfg.LLM_PROVIDER})")

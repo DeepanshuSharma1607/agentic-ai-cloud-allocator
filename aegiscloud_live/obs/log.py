@@ -10,7 +10,7 @@ ROLE
 HOW IT WORKS
     - A JSON line looks like {"t": 1731.2, "app": "gateway", "level": "WARNING", "src": "gateway", "msg": "..."}.
     - Each part owns its own file, so two parts never write to the same file (safe on Windows too).
-    - Files rotate at 5 MB (2 old copies kept), so logs can never fill the disk.
+    - Files rotate at 20 MB (5 old copies kept; AEGIS_LOG_MAX_MB / AEGIS_LOG_BACKUPS change it), so old logs last for days and can never fill the disk.
     - Crashes that nobody catches are written to the log too, so a dying part leaves a reason behind.
     - warn_every(key, seconds, msg) prevents one repeating problem from writing thousands of identical lines.
 
@@ -91,7 +91,7 @@ def setup(app: str, level: str | None = None) -> logging.Logger:
     root.addHandler(console)
     try:
         S.LOG_DIR.mkdir(parents=True, exist_ok=True)
-        fh = SafeRotatingFileHandler(S.LOG_DIR / f"{app}.jsonl", maxBytes=5_000_000, backupCount=2, encoding="utf-8")
+        fh = SafeRotatingFileHandler(S.LOG_DIR / f"{app}.jsonl", maxBytes=int(float(os.getenv("AEGIS_LOG_MAX_MB", "20")) * 1_000_000), backupCount=int(os.getenv("AEGIS_LOG_BACKUPS", "5")), encoding="utf-8")
         fh.setFormatter(JsonFormatter(app))
         root.addHandler(fh)
     except OSError as e:                                # a read-only folder must not stop the part from running

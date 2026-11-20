@@ -36,7 +36,8 @@ class ClusterManager:
     def __init__(self, backend: Backend, dev: Device, burn_ms: float, min_replicas: int = 1, log=print):
         self.backend, self.dev, self.burn_ms, self.min_replicas = backend, dev, float(burn_ms), int(min_replicas)
         self.log = log
-        self.lock = threading.RLock()
+        self.lock = threading.RLock()                # protects the bookkeeping; held only for microseconds (the gateway needs it for every request)
+        self._io = threading.RLock()                 # serialises the SLOW backend work (create / remove containers) between reconcile and reset
         self.desired = self.min_replicas
         self.pods: dict = {}
         self.draining: dict[str, float] = {}
@@ -140,60 +141,81 @@ class ClusterManager:
             self._stop.wait(RECONCILE_S)
 
     def reconcile(self):
-        now = time.time()
-        pods = self.backend.observe()
-        with self.lock:
-            pods = [p for p in pods if p.name not in self.exclude]
-            self.pods = {p.name: p for p in pods}
-            for p in pods:
-                prev = self._seen.get(p.name)
-                if p.state == "ready" and prev != "ready":
-                    startup = (p.ready_at or now) - p.created_at
-                    self.startup_times.append(startup)
-                    self._event("ready", p.name, startup_s=startup)
-                if p.state == "failed" and prev != "failed":
-                    self._event("failed", p.name, detail="process / container exited")
-                    if self.backend.per_pod_routing:
-                        self.backend.remove(p.name)
-                if p.state == "starting" and now - p.created_at > START_TIMEOUT_S and self.backend.per_pod_routing:
-                    self._event("failed", p.name, detail=f"not ready after {START_TIMEOUT_S:.0f} s")
-                    self.backend.remove(p.name)
-                    p.state = "failed"
-                if p.state == "terminating" and prev != "terminating":
-                    self._event("draining", p.name)
-                self._seen[p.name] = p.state
-            for gone in [n for n in self._seen if n not in self.pods]:
-                if self._seen[gone] != "failed":
-                    self._event("removed", gone)
-                self._seen.pop(gone, None)
-                self.inflight.pop(gone, None)
-                self.latest.pop(gone, None)
-
-            active = [p for p in self.pods.values() if p.state in ("starting", "ready") and p.name not in self.draining]
-            if self.backend.per_pod_routing:
-                if len(active) < self.desired:
-                    need = self.desired - len(active)
-                    for name in self.backend.create(need, self.spec()):
-                        self._event("create_requested", name)
-                elif len(active) > self.desired:
-                    active.sort(key=lambda p: (p.state == "ready", self.inflight.get(p.name, 0), -p.created_at))
-                    for p in active[:len(active) - self.desired]:
-                        self.draining[p.name] = now
+        """Bring the real containers in line with `desired`.
+        Bookkeeping happens under self.lock (fast). The SLOW calls (Docker create / stop / remove, which take seconds) are
+        collected first and run AFTER the lock is released: before, every scale-up/-down froze request routing for seconds."""
+        with self._io:
+            now = time.time()
+            pods = self.backend.observe()
+            kill: list[tuple[str, bool]] = []          # (replica name, True = a finished drain that needs its bookkeeping closed)
+            create_n, k8s_target = 0, None
+            with self.lock:
+                pods = [p for p in pods if p.name not in self.exclude]
+                self.pods = {p.name: p for p in pods}
+                for p in pods:
+                    prev = self._seen.get(p.name)
+                    if p.state == "ready" and prev != "ready":
+                        startup = (p.ready_at or now) - p.created_at
+                        self.startup_times.append(startup)
+                        self._event("ready", p.name, startup_s=startup)
+                    if p.state == "failed" and prev != "failed":
+                        self._event("failed", p.name, detail="process / container exited")
+                        if self.backend.per_pod_routing:
+                            kill.append((p.name, False))
+                    if p.state == "starting" and now - p.created_at > START_TIMEOUT_S and self.backend.per_pod_routing:
+                        self._event("failed", p.name, detail=f"not ready after {START_TIMEOUT_S:.0f} s")
+                        kill.append((p.name, False))
+                        p.state = "failed"
+                    if p.state == "terminating" and prev != "terminating":
                         self._event("draining", p.name)
-                for name, since in list(self.draining.items()):
-                    if name not in self.pods:
-                        self.draining.pop(name, None)
-                    elif self.inflight.get(name, 0) == 0 or now - since > DRAIN_TIMEOUT_S:
-                        self.backend.remove(name)
+                    self._seen[p.name] = p.state
+                for gone in [n for n in self._seen if n not in self.pods]:
+                    if self._seen[gone] != "failed":
+                        self._event("removed", gone)
+                    self._seen.pop(gone, None)
+                    self.inflight.pop(gone, None)
+                    self.latest.pop(gone, None)
+
+                active = [p for p in self.pods.values() if p.state in ("starting", "ready") and p.name not in self.draining]
+                if self.backend.per_pod_routing:
+                    if len(active) < self.desired:
+                        create_n = self.desired - len(active)
+                    elif len(active) > self.desired:
+                        active.sort(key=lambda p: (p.state == "ready", self.inflight.get(p.name, 0), -p.created_at))
+                        for p in active[:len(active) - self.desired]:
+                            self.draining[p.name] = now
+                            self._event("draining", p.name)
+                    for name, since in list(self.draining.items()):
+                        if name not in self.pods:
+                            self.draining.pop(name, None)
+                        elif self.inflight.get(name, 0) == 0 or now - since > DRAIN_TIMEOUT_S:
+                            kill.append((name, True))
+                elif self._k8s_target != self.desired:
+                    k8s_target = self.desired
+
+            # ---- slow work, lock NOT held: requests keep flowing while Docker works
+            for name, drained in kill:
+                try:
+                    self.backend.remove(name)
+                except Exception as e:                                       # the next loop tries again
+                    obslog.warn_every(f"mgr-remove-{name}", 15, clog, "could not remove %s: %s", name, e)
+                    continue
+                if drained:
+                    with self.lock:
                         self.draining.pop(name, None)
                         self._event("removed", name)
                         self._seen.pop(name, None)
                         self.pods.pop(name, None)
-            else:
-                if self._k8s_target != self.desired:
-                    self.backend.scale_to(self.desired, self.spec())
-                    self._event("scale_requested", detail=f"deployment -> {self.desired}")
-                    self._k8s_target = self.desired
+            if create_n:
+                created = self.backend.create(create_n, self.spec())
+                with self.lock:
+                    for name in created:
+                        self._event("create_requested", name)
+            if k8s_target is not None:
+                self.backend.scale_to(k8s_target, self.spec())
+                with self.lock:
+                    self._event("scale_requested", detail=f"deployment -> {k8s_target}")
+                    self._k8s_target = k8s_target
 
     # ------------------------------------------------------------------ real resource samples
     def _sampler_loop(self):
@@ -201,16 +223,19 @@ class ClusterManager:
             t0 = time.time()
             try:
                 stats = self.backend.stats()
+                rows = []
                 with self.lock:
                     for name, st in stats.items():
                         pod = self.pods.get(name)
                         if pod is None:
                             continue
                         self.latest[name] = (st, t0)
-                        C.append_csv(C.RESOURCES_CSV, C.RESOURCE_COLS, {
+                        rows.append({
                             "ts": round(t0, 2), "replica": name, "state": pod.state, "cpu_pct": round(st.cpu_pct, 1),
                             "mem_mb": round(st.mem_mb, 1), "mem_limit_mb": round(st.mem_limit_mb or pod.mem_limit_mb or 0, 1),
                             "cpu_limit_cores": pod.cpu_limit_cores or ""})
+                for row in rows:                                             # disk writes happen after the lock is released
+                    C.append_csv(C.RESOURCES_CSV, C.RESOURCE_COLS, row)
             except Exception as e:
                 self.last_error = f"stats: {type(e).__name__}: {e}"
                 obslog.warn_every("mgr-stats", 15, clog, "resource sampling error: %s", self.last_error)
@@ -237,25 +262,29 @@ class ClusterManager:
 
     def reset_replicas(self, dev: Device | None = None, burn_ms: float | None = None):
         """Used when the device or the app weight changes: remove every replica; the reconcile loop starts new ones."""
-        with self.lock:
-            if dev is not None:
-                self.dev = dev
-            if burn_ms is not None:
-                self.burn_ms = float(burn_ms)
-            for p in list(self.pods.values()):
-                if self.backend.per_pod_routing:
-                    self.backend.remove(p.name)
-            if not self.backend.per_pod_routing:
-                self.backend.prepare(self.spec(), build=False)          # Deployment is replaced with the new limits / env
+        with self._io:
+            with self.lock:
+                if dev is not None:
+                    self.dev = dev
+                if burn_ms is not None:
+                    self.burn_ms = float(burn_ms)
+                names = [p.name for p in self.pods.values()]
+            if self.backend.per_pod_routing:
+                for name in names:                                           # Docker is slow: do not hold the routing lock meanwhile
+                    self.backend.remove(name)
+            else:
+                self.backend.prepare(self.spec(), build=False)              # Deployment is replaced with the new limits / env
                 self.backend.scale_to(0, self.spec())
-                self._k8s_target = None
-            self.pods.clear()
-            self.draining.clear()
-            self.inflight.clear()
-            self._seen.clear()
-            self.latest.clear()
-            self.desired = max(self.min_replicas, min(self.desired, self.dev.limits()["max_replicas"]))
-            self._event("reset", detail=f"new spec: cpu {self.dev.cpu_per_replica} core, mem {self.dev.mem_per_replica_mb} MB, burn {self.burn_ms:.1f} ms")
+            with self.lock:
+                if not self.backend.per_pod_routing:
+                    self._k8s_target = None
+                self.pods.clear()
+                self.draining.clear()
+                self.inflight.clear()
+                self._seen.clear()
+                self.latest.clear()
+                self.desired = max(self.min_replicas, min(self.desired, self.dev.limits()["max_replicas"]))
+                self._event("reset", detail=f"new spec: cpu {self.dev.cpu_per_replica} core, mem {self.dev.mem_per_replica_mb} MB, burn {self.burn_ms:.1f} ms")
 
     def snapshot(self) -> dict:
         now = time.time()

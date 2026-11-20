@@ -21,6 +21,7 @@ class AgentState(TypedDict, total=False):
     last_alert_minute: int      # minute when the last urgent email was triggered
     llm_failures: int           # LLM failures in a row (alert after LLM_FAILURES_BEFORE_ALERT)
     last_scale_up_minute: int   # minute of the last scale-up (auto_scale will not scale down for DOWN_WAIT minutes after it)
+    health_run: dict            # real-service health counters carried from tick to tick (see agent/health.py)
 
     # ---- node 1: store_prediction ----
     tick: dict                  # the newest row from the prediction service (put here by run.py)
