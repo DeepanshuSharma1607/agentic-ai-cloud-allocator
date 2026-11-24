@@ -85,6 +85,8 @@ MISTRAL_MODEL = "mistral-small-latest"
 LLM_TIMEOUT = 30          # seconds to wait for the LLM before giving up (the agent then holds)
 LLM_RETRIES = 2           # extra tries when the server is busy (503/429) or the connection drops
 LLM_RETRY_WAIT = 2        # seconds to wait before a retry (2 s, then 4 s)
+LLM_MIN_GAP_SECONDS = 20   # real seconds between two online LLM calls, whatever the tick length (protects the API quota / 429)
+LLM_BREAKER_SECONDS = 120  # after a "429 too many requests" the online LLM is not called for this long (the plain formula decides)
 LLM_FAILURES_BEFORE_ALERT = 2   # email a human only after this many LLM failures IN A ROW (one 503 is not an emergency)
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")

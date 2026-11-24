@@ -56,6 +56,8 @@ def read(since: float = 0.0, apps=None, level: str = "INFO", q: str = "", limit:
     """Newest `limit` entries with time > since, oldest first."""
     mn, out = LEVELS.get(level.upper(), 20), []
     for path in log_files():
+        if apps and path.stem not in apps:                       # file <app>.jsonl only holds that app's lines: do not even read the others
+            continue
         try:
             with open(path, "rb") as f:
                 f.seek(0, 2)

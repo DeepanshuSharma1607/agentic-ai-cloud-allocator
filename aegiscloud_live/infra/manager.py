@@ -156,8 +156,11 @@ class ClusterManager:
                     prev = self._seen.get(p.name)
                     if p.state == "ready" and prev != "ready":
                         startup = (p.ready_at or now) - p.created_at
-                        self.startup_times.append(startup)
-                        self._event("ready", p.name, startup_s=startup)
+                        if startup > START_TIMEOUT_S:                          # a container adopted from an earlier run: its age is not a startup time
+                            self._event("ready", p.name, detail="adopted existing replica (startup time not measured)")
+                        else:
+                            self.startup_times.append(startup)
+                            self._event("ready", p.name, startup_s=startup)
                     if p.state == "failed" and prev != "failed":
                         self._event("failed", p.name, detail="process / container exited")
                         if self.backend.per_pod_routing:

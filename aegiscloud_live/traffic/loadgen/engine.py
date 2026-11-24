@@ -126,12 +126,20 @@ class LoadEngine:
     @staticmethod
     def _append(path, cols, row):
         path.parent.mkdir(parents=True, exist_ok=True)
-        new = not path.exists() or path.stat().st_size == 0
-        with open(path, "a", newline="", encoding="utf-8") as f:
-            w = csv.DictWriter(f, fieldnames=cols)
-            if new:
-                w.writeheader()
-            w.writerow(row)
+        for attempt in range(3):
+            try:
+                new = not path.exists() or path.stat().st_size == 0
+                with open(path, "a", newline="", encoding="utf-8") as f:
+                    w = csv.DictWriter(f, fieldnames=cols)
+                    if new:
+                        w.writeheader()
+                    w.writerow(row)
+                return
+            except OSError as e:                                       # locked file: never stop the sender because of a log row
+                if attempt == 2:
+                    log.warning("could not write one row to %s (%s): dropped, sender keeps running", path.name, e)
+                    return
+                time.sleep(0.3)
 
     def _event(self, kind, detail):
         self._append(S.LOADGEN_DIR / "events.csv", ["wallclock", "event", "detail"],

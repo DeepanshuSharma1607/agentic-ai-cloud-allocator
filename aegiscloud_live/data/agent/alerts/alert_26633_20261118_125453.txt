@@ -1,0 +1,14 @@
+Subject: [URGENT] Real service is slow: p95 latency above 500 ms
+Status: sent to deepanshusharma0846@gmail.com
+
+What is wrong:
+The real service is slow, with the p95 latency staying above 500 ms for 6 ticks in a row, reaching 3150 ms on the last tick at minute 26633.
+
+Evidence:
+At minute 26633, traffic is 473/min, the forecast is 444/min, and utilization is 79% with 3 replicas running out of a limit of 4. Over the last 59 minutes, traffic reached a minimum of 0 and a maximum of 701, and the forecast error (WAPE) was 77%.
+
+What the autoscaler already did:
+The autoscaler recently held or scaled replicas, including scaling up from 1 to 2 at minute 26622 and from 2 to 3 at minute 26628, holding at 3 replicas at minute 26629 because the highest demand in the last 10 min was 500/min.
+
+What you should check or do next:
+Check if the replica limit of 4 is restricting necessary scale-up, review the high forecast error (WAPE 77%), and investigate service resource bottlenecks or node health.

@@ -24,6 +24,16 @@ from traffic.loadgen.engine import LoadEngine
 obslog.setup("loadgen")                         # shared logging: console + data/logs/loadgen.jsonl
 
 
+class _IgnoreResetNoise(__import__("logging").Filter):
+    """Windows asyncio logs a full traceback when the server closes a connection (WinError 10054). Harmless, hides real problems."""
+    def filter(self, record):
+        exc = record.exc_info[1] if record.exc_info else None
+        return not isinstance(exc, ConnectionResetError)
+
+
+__import__("logging").getLogger("asyncio").addFilter(_IgnoreResetNoise())
+
+
 class Plan(BaseModel):
     mode: Literal["idle", "fixed", "random", "pattern", "replay"] = "fixed"
     n: int = Field(100, ge=0)

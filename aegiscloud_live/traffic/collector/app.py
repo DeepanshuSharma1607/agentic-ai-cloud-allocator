@@ -112,7 +112,12 @@ class Collector:
                 if next_t < loop.time():                              # we fell far behind: do not fire a burst of catch-up ticks
                     next_t = loop.time() + S.TICK_SECONDS
                 if not self.paused:
-                    await self.collect_once(client)
+                    try:
+                        await self.collect_once(client)
+                    except asyncio.CancelledError:
+                        raise
+                    except Exception as e:                            # a bad snapshot or a locked CSV (Excel!) skips ONE tick, never stops the collector
+                        logging.getLogger("collector").error("tick skipped: %s: %s", type(e).__name__, e)
 
 
 @asynccontextmanager

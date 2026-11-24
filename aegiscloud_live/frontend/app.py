@@ -13,8 +13,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+import warnings
+
 import pandas as pd
 import streamlit as st
+
+warnings.filterwarnings("ignore", message="Discarding nonzero nanoseconds")      # plotly + pandas timestamps: harmless, was flooding frontend.log
 
 import settings as S
 from frontend import charts

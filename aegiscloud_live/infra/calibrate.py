@@ -61,9 +61,10 @@ async def run(mgr, say=print) -> dict:
     est = D.estimate_rps_per_replica(dev, burn)
     say("starting one test replica ...")
     def make():
-        with mgr.lock:                                   # hidden from the manager so it is not drained as "extra"
+        with mgr._io:                                    # blocks only reconcile (a background thread), never the gateway's request path
             n = backend.create(1, mgr.spec())[0]
-            mgr.exclude.add(n)
+            with mgr.lock:                               # hidden from the manager so it is not drained as "extra" (microseconds)
+                mgr.exclude.add(n)
             return n
     name = await asyncio.to_thread(make)
     try:

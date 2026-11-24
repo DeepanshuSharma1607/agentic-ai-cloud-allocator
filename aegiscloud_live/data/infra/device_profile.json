@@ -1,15 +1,15 @@
 {
-  "name": "Laptop 4 threads / 8 GB",
-  "cores": 4.0,
-  "ram_mb": 8192,
-  "reserve_cores": 2.0,
-  "reserve_ram_mb": 5000,
+  "name": "Laptop 8 threads / 16 GB (Docker Desktop)",
+  "cores": 8.0,
+  "ram_mb": 16384,
+  "reserve_cores": 3.0,
+  "reserve_ram_mb": 8000,
   "cpu_per_replica": 0.5,
   "mem_per_replica_mb": 192,
   "hard_max": 20,
   "auto_fit": true,
   "burn_ms": 20.0,
   "headroom": 1.4,
-  "target_util": 0.4,
+  "target_util": 0.85,
   "slo_p95_ms": 500.0
 }

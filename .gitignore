@@ -39,7 +39,7 @@ secrets/
 **/datasets/
 **/raw/
 **/processed/
-agent/data/
+# agent/data/
 test/output/
 *.parquet
 *.feather

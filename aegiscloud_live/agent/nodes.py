@@ -14,6 +14,7 @@ Every node is a plain function:  node(state) -> dict of the keys it changes.
 """
 import csv
 import io
+import logging
 import math
 import time
 
@@ -69,12 +70,20 @@ def _clean(value):
 
 
 def append_row(path, cols, row):
-    new_file = (not path.exists()) or path.stat().st_size == 0
-    with open(path, "a", newline="", encoding="utf-8") as f:
-        w = csv.DictWriter(f, fieldnames=cols)
-        if new_file:
-            w.writeheader()
-        w.writerow({k: _clean(v) for k, v in row.items()})
+    for attempt in range(3):
+        try:
+            new_file = (not path.exists()) or path.stat().st_size == 0
+            with open(path, "a", newline="", encoding="utf-8") as f:
+                w = csv.DictWriter(f, fieldnames=cols)
+                if new_file:
+                    w.writeheader()
+                w.writerow({k: _clean(v) for k, v in row.items()})
+            return
+        except OSError as e:                                           # file locked (open in Excel) or disk problem
+            if attempt == 2:
+                logging.getLogger("agent").warning("could not write one row to %s (%s): row dropped, agent keeps running", path.name, e)
+                return
+            time.sleep(0.3)
 
 
 def _tail_rows(path, cols, rows, floor=0):
@@ -294,7 +303,10 @@ def apply_and_log(state):
     decision = state["decision"]
     before = state["replicas"]
     applied = guardrail(decision["replicas"], before, state["max_replicas"])
-    set_replicas(applied)
+    reason_note = ""
+    if set_replicas(applied) is False:                                 # the gateway never confirmed: do NOT pretend it worked, the next tick asks again
+        applied = before
+        reason_note = " [scale command not confirmed by the gateway, will retry next tick]"
     action = "scale_up" if applied > before else "scale_down" if applied < before else "hold"
 
     if state["mode"] != cfg.MODE_AUTO or applied != before:     # skip the boring "auto + hold" minutes
@@ -302,7 +314,7 @@ def apply_and_log(state):
             "minute": state["minute"], "mode": state["mode"], "reason": state["reason"],
             "traffic_now": round(state["traffic_now"], 1), "forecast": round(state["forecast"], 1),
             "replicas_before": before, "proposed": decision["replicas"], "applied": applied,
-            "action": action, "decision_reason": decision["reason"],
+            "action": action, "decision_reason": decision["reason"] + reason_note,
         })
 
     failures = state.get("llm_failures", 0)

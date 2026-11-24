@@ -17,6 +17,7 @@ Provider is chosen in config.py: "fake", "gemini" or "mistral".
 """
 import json
 import math
+import random
 import time
 
 import requests
@@ -82,10 +83,35 @@ def fake_llm(facts):
 RETRY_STATUS = (429, 500, 502, 503, 504)       # "busy / try again" answers from the server
 
 
+_state = {"last_call": 0.0, "blocked_until": 0.0}      # wall-clock guards, shared by every online call
+
+
+def _guard_reason():
+    """None if an online call is allowed now, else a short sentence saying why not (rate-limit protection)."""
+    now = time.time()
+    if now < _state["blocked_until"]:
+        return f"LLM paused for {_state['blocked_until'] - now:.0f}s after a 429 (too many requests)"
+    gap = getattr(cfg, "LLM_MIN_GAP_SECONDS", 0)
+    if gap and now - _state["last_call"] < gap:
+        return f"LLM called {now - _state['last_call']:.0f}s ago, minimum gap is {gap}s"
+    return None
+
+
+def _retry_wait(attempt, response=None):
+    """Seconds to wait before a retry: the server's Retry-After if given, else 2 s, 4 s ...; plus jitter so retries never line up."""
+    wait = cfg.LLM_RETRY_WAIT * (attempt + 1)
+    try:
+        wait = max(wait, float(getattr(response, "headers", {}).get("Retry-After", 0)))
+    except (TypeError, ValueError, AttributeError):
+        pass
+    return min(wait, 30) + random.uniform(0, 1.0)
+
+
 def post_json(url, body, headers):
     """POST and return the reply as a dict. Temporary problems (busy server, dropped connection) are retried
     a few times. Real errors (wrong key, wrong model name) are raised at once with the server's explanation."""
     last = "unknown problem"
+    r = None
     for attempt in range(cfg.LLM_RETRIES + 1):
         try:
             r = requests.post(url, json=body, headers=headers, timeout=cfg.LLM_TIMEOUT)
@@ -97,7 +123,10 @@ def post_json(url, body, headers):
         except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
             last = f"{type(e).__name__}: {e}"
         if attempt < cfg.LLM_RETRIES:
-            time.sleep(cfg.LLM_RETRY_WAIT * (attempt + 1))
+            time.sleep(_retry_wait(attempt, r))
+            r = None
+    if last.startswith("HTTP 429"):                                 # still rate limited after the retries: stop hammering the API for a while
+        _state["blocked_until"] = time.time() + getattr(cfg, "LLM_BREAKER_SECONDS", 120)
     raise RuntimeError(f"still failing after {cfg.LLM_RETRIES + 1} tries, last problem: {last}")
 
 
@@ -173,6 +202,12 @@ def ask_llm(script, mode, reason, facts):
                 raise ValueError(f"API key for {cfg.LLM_PROVIDER} is not set (see config.py)")
             user = build_prompt(script, mode, reason, facts)
             call = call_gemini if cfg.LLM_PROVIDER == "gemini" else call_mistral
+            why = _guard_reason()
+            if why:                                                 # do not call the API now: the plain formula decides (same as the auto branch)
+                answer = parse_reply(json.dumps(fake_llm(facts)), facts)
+                answer["reason"] = f"{why}; used the plain formula: {answer['reason']}"[:300]
+                return answer
+            _state["last_call"] = time.time()
             text = call(SYSTEM_PROMPT, user)
         return parse_reply(text, facts)
     except Exception as e:                                  # network, timeout, bad JSON, anything
@@ -198,6 +233,9 @@ def write_alert_email(reason, context):
         if not key:
             raise ValueError(f"API key for {cfg.LLM_PROVIDER} is not set")
         call = call_gemini if cfg.LLM_PROVIDER == "gemini" else call_mistral
+        if time.time() < _state["blocked_until"]:                   # rate limited: the e-mail must still go out, written by plain code
+            return template_email(reason, context, note="(The LLM is paused after a 429, this is the automatic version.)\n\n")
+        _state["last_call"] = time.time()
         text = call(ALERT_SYSTEM_PROMPT, f"Problem detected: {reason}\n\n{context}")
         start, end = text.find("{"), text.rfind("}")
         if start == -1 or end <= start:

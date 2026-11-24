@@ -131,9 +131,19 @@ class Engine:
     @staticmethod
     def _append(row):
         S.PRED_CSV.parent.mkdir(parents=True, exist_ok=True)
-        new_file = not S.PRED_CSV.exists() or S.PRED_CSV.stat().st_size == 0
-        with open(S.PRED_CSV, "a", newline="", encoding="utf-8") as f:
-            w = csv.DictWriter(f, fieldnames=PRED_COLS)
-            if new_file:
-                w.writeheader()
-            w.writerow(row)
+        for attempt in range(3):
+            try:
+                new_file = not S.PRED_CSV.exists() or S.PRED_CSV.stat().st_size == 0
+                with open(S.PRED_CSV, "a", newline="", encoding="utf-8") as f:
+                    w = csv.DictWriter(f, fieldnames=PRED_COLS)
+                    if new_file:
+                        w.writeheader()
+                    w.writerow(row)
+                return
+            except OSError as e:                                       # predictions.csv locked (open in Excel): never lose the live forecast
+                if attempt == 2:
+                    import logging
+                    logging.getLogger("prediction").warning("could not write predictions.csv (%s): this row is dropped, forecasting continues", e)
+                    return
+                import time
+                time.sleep(0.3)

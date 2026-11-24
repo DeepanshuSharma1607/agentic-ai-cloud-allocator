@@ -97,7 +97,8 @@ async def work():
         mgr.release(name)
     if good:
         win.ok += 1
-        win.lat.append((time.perf_counter() - t0) * 1000.0)
+        if len(win.lat) < 200_000:                                             # bounded even if nobody reads /snapshot
+            win.lat.append((time.perf_counter() - t0) * 1000.0)
         return {"ok": True}
     win.errors += 1
     return JSONResponse({"ok": False, "error": "replica refused or failed"}, status_code=503)

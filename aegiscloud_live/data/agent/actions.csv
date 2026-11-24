@@ -1,0 +1,252 @@
+minute,mode,reason,traffic_now,forecast,replicas_before,proposed,applied,action,decision_reason
+25442,unusual,spike: forecast jumped 64% in one minute,420.0,310.4,2,2,2,hold,Current traffic spike exceeds safe capacity margin despite a lower forecast.
+25452,unusual,spike: forecast jumped 31% in one minute,328.0,292.1,2,2,2,hold,Current replicas can handle the peak demand comfortably with spare capacity.
+25464,timer,timer: 12 minutes since the last check,199.0,207.7,2,2,2,hold,Current replicas are sufficient for the traffic and expected demand.
+25478,timer,timer: 12 minutes since the last check,172.0,177.0,1,1,1,hold,Current replica capacity is sufficient for the anticipated traffic demand.
+25482,unusual,forecast error: 52% over the last 5 minutes,66.0,78.6,1,1,1,hold,Current traffic and future forecast are well within the capacity of a single replica.
+25488,unusual,forecast error: 145% over the last 5 minutes,73.0,93.6,1,1,1,hold,Current traffic is extremely low and one replica is more than sufficient.
+25494,unusual,forecast error: 109% over the last 5 minutes,40.0,57.4,1,1,1,hold,Current traffic remains very low and well within single replica capacity.
+25506,timer,timer: 12 minutes since the last check,81.0,102.3,1,1,1,hold,Current traffic and forecast are well within the capacity of a single replica.
+25508,unusual,forecast error: 54% over the last 5 minutes,296.0,281.1,1,1,1,hold,Current replica capacity easily handles the sudden traffic spike.
+25514,unusual,forecast error: 67% over the last 5 minutes,242.0,216.9,1,1,1,hold,Current traffic of 242 requests per minute is well within the 780 capacity of a single replica.
+25526,timer,timer: 12 minutes since the last check,250.0,215.8,1,1,1,hold,Current capacity is more than sufficient for the actual traffic.
+25538,timer,timer: 12 minutes since the last check,335.0,249.5,1,1,1,hold,Current traffic is well below replica capacity.
+25550,timer,timer: 12 minutes since the last check,369.0,271.4,1,1,1,hold,Current replica capacity easily handles the actual traffic despite forecast errors.
+25562,timer,timer: 12 minutes since the last check,474.0,294.8,1,1,1,hold,Current replica capacity easily handles the actual demand.
+25574,timer,timer: 12 minutes since the last check,464.0,296.7,1,1,1,hold,Current capacity easily handles the actual demand despite inaccurate forecasts.
+25585,auto,nothing unusual and the timer is not due,147.0,149.3,1,3,3,scale_up,"auto: highest demand in the last 10 min is 473/min, needs 3 replicas"
+25588,unusual,forecast error: 54% over the last 5 minutes,187.0,172.9,3,3,3,hold,Current replicas comfortably handle the dropping traffic demand.
+25595,auto,nothing unusual and the timer is not due,127.0,134.2,3,2,2,scale_down,"auto: highest demand in the last 10 min is 359/min, needs 2 replicas"
+25600,timer,timer: 12 minutes since the last check,139.0,141.7,2,2,2,hold,Current replicas are sufficient for the current traffic and near-term forecast.
+25603,auto,nothing unusual and the timer is not due,222.0,215.7,2,1,1,scale_down,"auto: highest demand in the last 10 min is 222/min, needs 1 replicas"
+25604,unusual,near capacity: 265/min against 255/min capacity,265.0,227.7,1,2,2,scale_up,Current traffic exceeds capacity of a single replica and requires scaling up.
+25614,auto,nothing unusual and the timer is not due,184.0,181.1,2,1,1,scale_down,"auto: highest demand in the last 10 min is 188/min, needs 1 replicas"
+25616,unusual,spike: forecast jumped 72% in one minute,224.0,213.0,1,2,2,scale_up,Current traffic exceeds single replica capacity with spare room.
+25626,auto,nothing unusual and the timer is not due,157.0,125.6,2,1,1,scale_down,"auto: highest demand in the last 10 min is 201/min, needs 1 replicas"
+25628,timer,timer: 12 minutes since the last check,135.0,101.1,1,1,1,hold,Current traffic is well below capacity and one replica is sufficient.
+25629,unusual,spike: forecast jumped 33% in one minute,189.0,134.0,1,1,1,hold,Current replica capacity easily handles the traffic demand with enough spare room.
+25638,unusual,spike: forecast jumped 64% in one minute,152.0,139.3,1,1,1,hold,Current capacity easily handles actual and forecasted traffic.
+25650,timer,timer: 12 minutes since the last check,141.0,136.6,1,1,1,hold,Current replica capacity is sufficient for the demand.
+25657,unusual,spike: forecast jumped 36% in one minute,134.0,135.3,1,1,1,hold,Current capacity of 255 easily handles the demand of 134 with plenty of spare room.
+25666,unusual,spike: forecast jumped 45% in one minute,164.0,140.3,1,1,1,hold,Current capacity of one replica is sufficient for the demand.
+25697,timer,timer: 12 minutes since the last check,100.0,103.0,1,1,1,hold,Current replica capacity is more than sufficient for the demand.
+25709,timer,timer: 12 minutes since the last check,107.0,97.2,1,1,1,hold,Current replica capacity is sufficient for the demand.
+25721,timer,timer: 12 minutes since the last check,91.0,90.0,1,1,1,hold,Current replica capacity is sufficient for the demand.
+25733,timer,timer: 12 minutes since the last check,92.0,93.4,1,1,1,hold,Current replica capacity is sufficient for the stable traffic demand.
+25745,timer,timer: 12 minutes since the last check,95.0,88.5,1,1,1,hold,Current capacity of one replica is well above the actual traffic and expected demand.
+25757,timer,timer: 12 minutes since the last check,113.0,105.4,1,1,1,hold,Current capacity easily handles the actual and forecasted traffic.
+25769,timer,timer: 12 minutes since the last check,73.0,73.0,1,1,1,hold,Current capacity is sufficient to handle the anticipated traffic demand.
+25781,timer,timer: 12 minutes since the last check,84.0,82.8,1,1,1,hold,Current replica capacity easily handles the actual demand.
+25793,timer,timer: 12 minutes since the last check,93.0,89.2,1,1,1,hold,Current capacity easily handles the actual and forecasted traffic.
+25805,timer,timer: 12 minutes since the last check,76.0,75.1,1,1,1,hold,Current replica count provides sufficient capacity for the demand.
+25817,timer,timer: 12 minutes since the last check,89.0,88.1,1,1,1,hold,Current replica capacity easily handles the traffic demand with plenty of spare room.
+25829,timer,timer: 12 minutes since the last check,44.0,51.1,1,1,1,hold,Current capacity is well above the actual traffic demand.
+25841,timer,timer: 12 minutes since the last check,79.0,81.0,1,1,1,hold,Current capacity easily handles the actual demand and forecast.
+25853,timer,timer: 12 minutes since the last check,80.0,77.2,1,1,1,hold,Current capacity easily handles the traffic demand.
+25865,timer,timer: 12 minutes since the last check,86.0,85.9,1,1,1,hold,Current capacity of one replica easily handles the demand.
+25877,timer,timer: 12 minutes since the last check,56.0,63.9,1,1,1,hold,Current traffic and forecast are well within the capacity of a single replica.
+25889,timer,timer: 12 minutes since the last check,98.0,94.3,1,1,1,hold,Current capacity is sufficient for the demand.
+25901,timer,timer: 12 minutes since the last check,82.0,83.2,1,1,1,hold,Current replica capacity easily handles the actual and forecasted traffic.
+25913,timer,timer: 12 minutes since the last check,76.0,86.1,1,1,1,hold,Current replica count provides sufficient capacity for the predicted demand.
+25925,timer,timer: 12 minutes since the last check,114.0,108.8,1,1,1,hold,Current capacity easily handles the traffic demand.
+25937,timer,timer: 12 minutes since the last check,48.0,56.4,1,1,1,hold,Current replicas are well within capacity for the demand.
+25949,timer,timer: 12 minutes since the last check,71.0,76.7,1,1,1,hold,Current replica capacity is sufficient for the low traffic demand.
+25961,timer,timer: 12 minutes since the last check,77.0,78.1,1,1,1,hold,Current replica count provides sufficient capacity for the demand.
+25973,timer,timer: 12 minutes since the last check,66.0,66.5,1,1,1,hold,Current replica count easily handles the low traffic demand.
+25985,timer,timer: 12 minutes since the last check,66.0,70.4,1,1,1,hold,Current capacity of 425 is more than sufficient for the demand.
+25997,unusual,forecast error: 57% over the last 5 minutes,60.0,74.7,1,1,1,hold,Current traffic is extremely low and easily handled by a single replica.
+26009,timer,timer: 12 minutes since the last check,52.0,65.6,1,1,1,hold,Current traffic and forecast are well within the capacity of a single replica.
+26015,unusual,forecast error: 54% over the last 5 minutes,240.0,162.0,1,1,1,hold,Current capacity of 425 is sufficient for the peak demand of 266 requests.
+26021,unusual,forecast error: 51% over the last 5 minutes,110.0,88.1,1,1,1,hold,Current replica count easily handles the traffic despite past forecast errors.
+26027,unusual,forecast error: 124% over the last 5 minutes,77.0,72.5,1,1,1,hold,Current capacity easily handles actual demand despite volatile forecasts.
+26039,timer,timer: 12 minutes since the last check,79.0,76.3,1,1,1,hold,Current capacity of one replica is more than enough for the demand.
+26051,timer,timer: 12 minutes since the last check,81.0,77.9,1,1,1,hold,Current capacity easily handles the actual and forecasted traffic demand.
+26063,timer,timer: 12 minutes since the last check,82.0,76.2,1,1,1,hold,Current capacity easily handles the actual and forecasted traffic.
+26075,timer,timer: 12 minutes since the last check,100.0,89.7,1,1,1,hold,Current capacity is more than sufficient for the observed traffic.
+26087,timer,timer: 12 minutes since the last check,117.0,102.1,1,1,1,hold,Current traffic is well below replica capacity despite forecast errors.
+26099,timer,timer: 12 minutes since the last check,96.0,88.3,1,1,1,hold,Current capacity easily handles the normal traffic level.
+26111,timer,timer: 12 minutes since the last check,120.0,101.8,1,1,1,hold,Current capacity easily handles the highest demand with plenty of spare room.
+26123,timer,timer: 12 minutes since the last check,95.0,85.2,1,1,1,hold,Current replica capacity is more than sufficient for the actual and forecasted traffic.
+26135,timer,timer: 12 minutes since the last check,214.0,161.9,1,1,1,hold,Current replica capacity easily handles the peak demand of 214 requests per minute.
+26138,unusual,forecast error: 52% over the last 5 minutes,239.0,169.6,1,1,1,hold,Current capacity of 425 requests per minute is sufficient for the peak demand of 239.
+26144,unusual,forecast error: 62% over the last 5 minutes,103.0,84.4,1,1,1,hold,Current traffic has dropped significantly and one replica has sufficient capacity.
+26150,unusual,forecast error: 97% over the last 5 minutes,80.0,79.4,1,1,1,hold,Current traffic is low and one replica has sufficient capacity.
+26162,timer,timer: 12 minutes since the last check,84.0,82.0,1,1,1,hold,Current replica capacity is more than sufficient for the demand.
+26174,timer,timer: 12 minutes since the last check,112.0,105.5,1,1,1,hold,Current capacity of one replica easily handles the demand.
+26186,timer,timer: 12 minutes since the last check,188.0,156.9,1,1,1,hold,Current capacity easily handles the highest demand with ample spare room.
+26198,timer,timer: 12 minutes since the last check,146.0,128.3,1,1,1,hold,Current replica capacity is more than sufficient for the demand.
+26210,timer,timer: 12 minutes since the last check,133.0,122.5,1,1,1,hold,Current capacity easily handles the actual and forecasted demand.
+26222,timer,timer: 12 minutes since the last check,148.0,134.2,1,1,1,hold,Current capacity easily handles the actual and forecasted traffic.
+26234,timer,timer: 12 minutes since the last check,130.0,119.8,1,1,1,hold,Current replica count provides sufficient capacity for the traffic demand.
+26246,timer,timer: 12 minutes since the last check,148.0,134.3,1,1,1,hold,Current capacity easily handles the actual demand and upcoming forecasts.
+26258,timer,timer: 12 minutes since the last check,139.0,123.0,1,1,1,hold,Current capacity is sufficient for the current and forecasted traffic.
+26270,timer,timer: 12 minutes since the last check,193.0,169.1,1,1,1,hold,Current capacity is sufficient for the demand with plenty of spare room.
+26282,timer,timer: 12 minutes since the last check,144.0,135.6,1,1,1,hold,Current capacity is sufficient for the demand.
+26294,timer,timer: 12 minutes since the last check,193.0,152.3,1,1,1,hold,Current capacity of 425 requests per minute is more than enough for the peak demand of 223.
+26306,timer,timer: 12 minutes since the last check,190.0,166.2,1,1,1,hold,Current capacity easily handles the highest recent demand.
+26313,unusual,spike: forecast jumped 55% in one minute,263.0,223.8,1,1,1,hold,Current capacity easily handles the peak demand with plenty of spare room.
+26324,unusual,spike: forecast jumped 61% in one minute,356.0,307.2,1,2,2,scale_up,Current demand and upcoming forecast exceed the safe capacity of a single replica.
+26334,auto,nothing unusual and the timer is not due,202.0,184.8,2,1,1,scale_down,"auto: highest demand in the last 10 min is 239/min, needs 1 replicas"
+26336,timer,timer: 12 minutes since the last check,219.0,190.8,1,1,1,hold,Current capacity of 425 is sufficient for the demand of 219.
+26348,timer,timer: 12 minutes since the last check,149.0,142.0,1,1,1,hold,Current capacity is more than sufficient for the demand.
+26360,timer,timer: 12 minutes since the last check,222.0,205.9,1,1,1,hold,Current capacity of 425 is sufficient for the demand of 222 requests per minute with ample spare room.
+26383,timer,timer: 12 minutes since the last check,176.0,169.1,1,1,1,hold,Current capacity easily handles the traffic demand.
+26386,unusual,spike: forecast jumped 97% in one minute,407.0,332.4,1,2,2,scale_up,Actual traffic has spiked significantly and requires additional capacity.
+26398,timer,timer: 12 minutes since the last check,189.0,176.0,2,2,2,hold,Current replica count matches formula demand and traffic has stabilized.
+26400,auto,nothing unusual and the timer is not due,231.0,220.1,2,1,1,scale_down,"auto: highest demand in the last 10 min is 326/min, needs 1 replicas"
+26402,unusual,spike: forecast jumped 66% in one minute,291.0,216.8,1,1,1,hold,Current capacity of one replica easily handles the demand of 291 requests per minute.
+26414,timer,timer: 12 minutes since the last check,175.0,169.4,1,1,1,hold,Current replica capacity is sufficient for the demand.
+26422,unusual,spike: forecast jumped 35% in one minute,274.0,234.9,1,1,1,hold,Current capacity easily handles the actual demand and the forecast.
+26426,auto,nothing unusual and the timer is not due,402.0,291.3,1,2,2,scale_up,"auto: highest demand in the last 10 min is 402/min, needs 2 replicas"
+26430,unusual,forecast error: 56% over the last 5 minutes,401.0,307.4,2,2,2,hold,Current replicas easily handle the demand with ample spare capacity.
+26442,timer,timer: 12 minutes since the last check,401.0,314.5,2,2,2,hold,Current replicas easily handle the demand with adequate spare room.
+26454,timer,timer: 12 minutes since the last check,257.0,197.4,2,2,2,hold,Current traffic has dropped and two replicas are sufficient.
+26461,unusual,forecast error: 63% over the last 5 minutes,178.0,182.6,2,2,2,hold,Current traffic has dropped significantly and two replicas are sufficient for the demand.
+26463,auto,nothing unusual and the timer is not due,182.0,183.4,2,1,1,scale_down,"auto: highest demand in the last 10 min is 297/min, needs 1 replicas"
+26467,unusual,forecast error: 77% over the last 5 minutes,148.0,163.9,1,1,1,hold,Current replica capacity is sufficient for the demand with adequate spare room.
+26473,unusual,forecast error: 104% over the last 5 minutes,38.0,58.4,1,1,1,hold,Current traffic is very low and one replica provides ample capacity.
+26478,auto,nothing unusual and the timer is not due,392.0,606.0,1,2,2,scale_up,"auto: highest demand in the last 10 min is 606/min, needs 2 replicas"
+26479,unusual,spike: forecast jumped 53% in one minute,602.0,929.1,2,3,3,scale_up,Rising demand and high forecast require scaling up to handle incoming traffic safely.
+26485,unusual,forecast error: 328% over the last 5 minutes,0.0,0.9,3,1,2,scale_down,Current traffic has dropped to zero and forecasts indicate low demand.
+26486,auto,nothing unusual and the timer is not due,0.0,1.0,2,3,3,scale_up,"auto: highest demand in the last 10 min is 929/min, needs 3 replicas"
+26496,auto,nothing unusual and the timer is not due,389.0,230.2,1,2,2,scale_up,"auto: highest demand in the last 7 min is 389/min, needs 2 replicas"
+26501,timer,timer: 12 minutes since the last check,336.0,230.3,2,2,2,hold,Current replicas are sufficient for the traffic demand with adequate spare capacity.
+26506,auto,nothing unusual and the timer is not due,142.0,124.7,2,1,1,scale_down,"auto: highest demand in the last 10 min is 336/min, needs 1 replicas"
+26513,unusual,spike: forecast jumped 101% in one minute,350.0,266.0,1,1,1,hold,Current traffic is well within the capacity of a single replica.
+26525,unusual,forecast error: 97% over the last 5 minutes,74.0,58.5,1,1,1,hold,Current traffic is well below capacity and current replicas are sufficient.
+26531,unusual,spike: forecast jumped 89% in one minute,320.0,226.8,1,1,1,hold,Current capacity of 425 comfortably handles the peak demand of 320 requests per minute.
+26535,unusual,near capacity: 457/min against 400/min capacity,457.0,261.0,2,3,3,scale_up,"Current traffic significantly exceeds capacity, requiring immediate scaling."
+26545,auto,nothing unusual and the timer is not due,212.0,215.2,3,2,2,scale_down,"auto: highest demand in the last 10 min is 215/min, needs 2 replicas"
+26547,timer,timer: 12 minutes since the last check,156.0,155.9,2,2,2,hold,Current replicas of two are sufficient for the present demand and predicted traffic.
+26548,unusual,spike: forecast jumped 32% in one minute,214.0,206.1,2,2,2,hold,"Forecasts are unreliable with high error, but actual traffic requires more capacity."
+26560,timer,timer: 12 minutes since the last check,146.0,144.9,2,2,2,hold,Current replicas easily handle the demand with plenty of spare room.
+26562,unusual,forecast error: 57% over the last 5 minutes,123.0,127.2,2,2,2,hold,Current capacity is sufficient for the low actual traffic despite inaccurate forecasts.
+26563,auto,nothing unusual and the timer is not due,127.0,130.7,2,1,1,scale_down,"auto: highest demand in the last 10 min is 163/min, needs 1 replicas"
+26570,unusual,forecast error: 56% over the last 5 minutes,89.0,101.5,1,1,1,hold,Current replica count of 1 is sufficient for the demand.
+26580,unusual,spike: forecast jumped 94% in one minute,494.0,429.1,4,4,4,hold,Traffic has subsided and current replicas are at maximum capacity.
+26585,auto,nothing unusual and the timer is not due,227.0,203.5,4,3,3,scale_down,"auto: highest demand in the last 10 min is 494/min, needs 3 replicas"
+26590,auto,nothing unusual and the timer is not due,170.0,180.9,3,2,2,scale_down,"auto: highest demand in the last 10 min is 312/min, needs 2 replicas"
+26591,unusual,forecast error: 52% over the last 5 minutes,151.0,152.8,2,2,2,hold,Current replicas are sufficient for the low traffic demand.
+26598,unusual,forecast error: 82% over the last 5 minutes,71.0,90.9,2,2,2,hold,Current traffic and future forecast are well within the capacity of two replicas.
+26603,auto,nothing unusual and the timer is not due,60.0,81.1,2,1,1,scale_down,"auto: highest demand in the last 10 min is 181/min, needs 1 replicas"
+26604,unusual,spike: forecast jumped 44% in one minute,100.0,116.9,1,1,1,hold,Current traffic and forecast are well within the capacity of one replica.
+26611,unusual,spike: forecast jumped 84% in one minute,137.0,165.1,1,1,1,hold,Current capacity of one replica easily handles the actual demand and high forecast error makes relying on forecasts unsafe.
+26617,unusual,spike: forecast jumped 95% in one minute,130.0,166.4,1,1,1,hold,Current capacity easily handles actual and forecasted traffic despite high forecast error.
+26622,auto,nothing unusual and the timer is not due,195.0,204.2,1,2,2,scale_up,"auto: highest demand in the last 10 min is 204/min, needs 2 replicas"
+26623,unusual,forecast error: 95% over the last 5 minutes,70.0,76.9,2,2,2,hold,Current traffic is low and two replicas provide ample capacity.
+26628,auto,nothing unusual and the timer is not due,431.0,500.1,2,3,3,scale_up,"auto: highest demand in the last 10 min is 500/min, needs 3 replicas"
+26629,unusual,forecast error: 83% over the last 5 minutes,229.0,329.3,3,3,3,hold,Current replicas are sufficient for the live traffic and the forecasts are unreliable.
+26635,unusual,forecast error: 110% over the last 5 minutes,134.0,133.9,3,3,3,hold,Current traffic is low and three replicas provide ample capacity.
+26637,auto,nothing unusual and the timer is not due,478.0,548.4,3,4,4,scale_up,"auto: highest demand in the last 10 min is 548/min, needs 4 replicas"
+26641,unusual,spike: forecast jumped 142% in one minute,550.0,550.8,4,4,4,hold,Current replicas are already at maximum and sufficient for the demand.
+26655,unusual,spike: forecast jumped 99% in one minute,449.0,441.6,3,3,3,hold,fake LLM: demand 449/min needs 3 replicas
+26657,auto,nothing unusual and the timer is not due,579.0,530.5,3,4,4,scale_up,"auto: highest demand in the last 10 min is 579/min, needs 4 replicas"
+26664,unusual,spike: forecast jumped 38% in one minute,417.0,419.0,4,4,4,hold,fake LLM: demand 579/min needs 4 replicas
+26667,auto,nothing unusual and the timer is not due,353.0,363.3,4,3,3,scale_down,"auto: highest demand in the last 10 min is 419/min, needs 3 replicas"
+26675,auto,nothing unusual and the timer is not due,268.0,288.4,3,2,2,scale_down,"auto: highest demand in the last 10 min is 363/min, needs 2 replicas"
+26676,timer,timer: 12 minutes since the last check,253.0,260.1,2,2,2,hold,fake LLM: demand 363/min needs 2 replicas
+26678,unusual,spike: forecast jumped 105% in one minute,556.0,491.4,2,4,4,scale_up,fake LLM: demand 556/min needs 4 replicas
+26684,unusual,spike: forecast jumped 112% in one minute,614.0,561.9,4,4,4,hold,fake LLM: demand 614/min needs 4 replicas
+26694,unusual,forecast error: 53% over the last 5 minutes,228.0,256.2,4,3,3,scale_down,fake LLM: demand 503/min needs 3 replicas
+26700,auto,nothing unusual and the timer is not due,278.0,297.9,3,2,2,scale_down,"auto: highest demand in the last 10 min is 342/min, needs 2 replicas"
+26701,unusual,forecast error: 52% over the last 5 minutes,204.0,224.2,2,2,2,hold,fake LLM: demand 342/min needs 2 replicas
+26712,unusual,spike: forecast jumped 40% in one minute,276.0,286.9,2,2,2,hold,fake LLM: demand 317/min needs 2 replicas
+26719,unusual,spike: forecast jumped 41% in one minute,385.0,381.6,2,3,3,scale_up,fake LLM: demand 385/min needs 3 replicas
+26725,unusual,spike: forecast jumped 56% in one minute,324.0,347.1,3,3,3,hold,fake LLM: demand 385/min needs 3 replicas
+26737,timer,timer: 12 minutes since the last check,369.0,379.5,3,3,3,hold,fake LLM: demand 421/min needs 3 replicas
+26742,unusual,forecast error: 53% over the last 5 minutes,210.0,237.8,3,3,3,hold,fake LLM: demand 380/min needs 3 replicas
+26745,auto,nothing unusual and the timer is not due,714.0,631.2,3,4,4,scale_up,"auto: highest demand in the last 10 min is 714/min, needs 4 replicas"
+26748,unusual,forecast error: 51% over the last 5 minutes,429.0,400.4,4,4,4,hold,fake LLM: demand 951/min needs 6 replicas
+26755,unusual,forecast error: 101% over the last 5 minutes,164.0,182.5,4,4,4,hold,fake LLM: demand 951/min needs 6 replicas
+26757,auto,nothing unusual and the timer is not due,77.0,94.0,4,3,3,scale_down,"auto: highest demand in the last 10 min is 429/min, needs 3 replicas"
+26759,auto,nothing unusual and the timer is not due,166.0,192.4,3,2,2,scale_down,"auto: highest demand in the last 10 min is 242/min, needs 2 replicas"
+26761,unusual,forecast error: 181% over the last 5 minutes,133.0,158.1,2,2,2,hold,fake LLM: demand 235/min needs 2 replicas
+26773,timer,timer: 12 minutes since the last check,117.0,143.9,2,2,2,hold,fake LLM: demand 191/min needs 2 replicas
+26774,unusual,forecast error: 69% over the last 5 minutes,50.0,68.2,2,2,2,hold,fake LLM: demand 191/min needs 2 replicas
+26782,unusual,forecast error: 103% over the last 5 minutes,0.0,1.2,2,4,4,scale_up,fake LLM: demand 643/min needs 4 replicas
+26788,unusual,forecast error: 44080000000000% over the last 5 minutes,0.0,2.0,4,4,4,hold,fake LLM: demand 643/min needs 4 replicas
+26792,auto,nothing unusual and the timer is not due,0.0,2.0,4,1,3,scale_down,"auto: highest demand in the last 10 min is 2/min, needs 1 replicas"
+26793,auto,nothing unusual and the timer is not due,0.0,1.4,3,1,2,scale_down,"auto: highest demand in the last 10 min is 2/min, needs 1 replicas"
+26794,auto,nothing unusual and the timer is not due,0.0,2.0,2,1,1,scale_down,"auto: highest demand in the last 10 min is 2/min, needs 1 replicas"
+26796,unusual,forecast error: 770000000000% over the last 5 minutes,0.0,2.1,1,1,1,hold,fake LLM: demand 2/min needs 1 replicas
+26802,unusual,forecast error: 950000000000% over the last 5 minutes,0.0,1.9,1,1,1,hold,fake LLM: demand 2/min needs 1 replicas
+26808,unusual,forecast error: 1010000000000% over the last 5 minutes,0.0,2.1,1,1,1,hold,fake LLM: demand 2/min needs 1 replicas
+26814,unusual,forecast error: 860000000000% over the last 5 minutes,0.0,2.0,1,1,1,hold,fake LLM: demand 2/min needs 1 replicas
+26820,unusual,forecast error: 1040000000000% over the last 5 minutes,0.0,1.9,1,1,1,hold,fake LLM: demand 2/min needs 1 replicas
+26826,unusual,forecast error: 980000000000% over the last 5 minutes,0.0,2.6,1,1,1,hold,fake LLM: demand 87/min needs 1 replicas
+26832,unusual,forecast error: 334% over the last 5 minutes,0.0,2.9,1,1,1,hold,fake LLM: demand 90/min needs 1 replicas
+26838,unusual,forecast error: 1290000000000% over the last 5 minutes,0.0,3.4,1,1,1,hold,fake LLM: demand 90/min needs 1 replicas
+26844,unusual,forecast error: 1410000000000% over the last 5 minutes,0.0,3.4,1,1,1,hold,fake LLM: demand 4/min needs 1 replicas
+26850,unusual,forecast error: 1700000000000% over the last 5 minutes,0.0,3.3,1,1,1,hold,fake LLM: demand 4/min needs 1 replicas
+26856,unusual,forecast error: 1680000000000% over the last 5 minutes,0.0,3.4,1,1,1,hold,fake LLM: demand 3/min needs 1 replicas
+26862,unusual,forecast error: 1680000000000% over the last 5 minutes,0.0,3.4,1,1,1,hold,fake LLM: demand 3/min needs 1 replicas
+26868,unusual,forecast error: 1700000000000% over the last 5 minutes,0.0,3.5,1,1,1,hold,fake LLM: demand 4/min needs 1 replicas
+26874,unusual,forecast error: 1690000000000% over the last 5 minutes,0.0,3.4,1,1,1,hold,fake LLM: demand 4/min needs 1 replicas
+26880,unusual,forecast error: 1710000000000% over the last 5 minutes,0.0,3.2,1,1,1,hold,fake LLM: demand 3/min needs 1 replicas
+26886,unusual,forecast error: 1690000000000% over the last 5 minutes,0.0,3.3,1,1,1,hold,fake LLM: demand 3/min needs 1 replicas
+26892,unusual,forecast error: 1610000000000% over the last 5 minutes,0.0,3.1,1,1,1,hold,fake LLM: demand 3/min needs 1 replicas
+26898,unusual,forecast error: 1610000000000% over the last 5 minutes,0.0,3.1,1,1,1,hold,fake LLM: demand 3/min needs 1 replicas
+26904,unusual,forecast error: 1550000000000% over the last 5 minutes,0.0,3.2,1,1,1,hold,fake LLM: demand 3/min needs 1 replicas
+26910,unusual,forecast error: 1590000000000% over the last 5 minutes,0.0,3.1,1,1,1,hold,fake LLM: demand 3/min needs 1 replicas
+26916,unusual,forecast error: 1540000000000% over the last 5 minutes,0.0,3.1,1,1,1,hold,fake LLM: demand 3/min needs 1 replicas
+26922,unusual,forecast error: 1560000000000% over the last 5 minutes,0.0,3.1,1,1,1,hold,fake LLM: demand 3/min needs 1 replicas
+26928,unusual,forecast error: 1570000000000% over the last 5 minutes,0.0,3.1,1,1,1,hold,fake LLM: demand 3/min needs 1 replicas
+26934,unusual,forecast error: 1580000000000% over the last 5 minutes,0.0,3.2,1,1,1,hold,fake LLM: demand 3/min needs 1 replicas
+26940,unusual,forecast error: 1550000000000% over the last 5 minutes,0.0,3.0,1,1,1,hold,fake LLM: demand 3/min needs 1 replicas
+26946,unusual,forecast error: 1560000000000% over the last 5 minutes,0.0,3.0,1,1,1,hold,fake LLM: demand 3/min needs 1 replicas
+26952,unusual,forecast error: 1490000000000% over the last 5 minutes,0.0,3.1,1,1,1,hold,fake LLM: demand 3/min needs 1 replicas
+26958,unusual,forecast error: 1500000000000% over the last 5 minutes,0.0,3.1,1,1,1,hold,fake LLM: demand 3/min needs 1 replicas
+26964,unusual,forecast error: 1530000000000% over the last 5 minutes,0.0,3.0,1,1,1,hold,fake LLM: demand 3/min needs 1 replicas
+26970,unusual,forecast error: 1530000000000% over the last 5 minutes,0.0,2.9,1,1,1,hold,fake LLM: demand 3/min needs 1 replicas
+26976,unusual,forecast error: 1500000000000% over the last 5 minutes,0.0,2.9,1,1,1,hold,fake LLM: demand 3/min needs 1 replicas
+26982,unusual,forecast error: 1460000000000% over the last 5 minutes,0.0,2.9,1,1,1,hold,fake LLM: demand 3/min needs 1 replicas
+26988,unusual,forecast error: 1460000000000% over the last 5 minutes,0.0,2.9,1,1,1,hold,fake LLM: demand 3/min needs 1 replicas
+26994,unusual,forecast error: 1460000000000% over the last 5 minutes,0.0,2.9,1,1,1,hold,fake LLM: demand 3/min needs 1 replicas
+27000,unusual,forecast error: 1450000000000% over the last 5 minutes,0.0,2.9,1,1,1,hold,fake LLM: demand 3/min needs 1 replicas
+27006,unusual,forecast error: 1440000000000% over the last 5 minutes,0.0,2.8,1,1,1,hold,fake LLM: demand 3/min needs 1 replicas
+27012,unusual,forecast error: 1420000000000% over the last 5 minutes,0.0,2.8,1,1,1,hold,fake LLM: demand 3/min needs 1 replicas
+27018,unusual,forecast error: 1420000000000% over the last 5 minutes,0.0,2.8,1,1,1,hold,fake LLM: demand 3/min needs 1 replicas
+27024,unusual,forecast error: 1400000000000% over the last 5 minutes,0.0,2.6,1,1,1,hold,fake LLM: demand 3/min needs 1 replicas
+27028,auto,nothing unusual and the timer is not due,731.0,1679.5,1,4,3,scale_up,"auto: highest demand in the last 10 min is 1680/min, needs 4 replicas"
+27029,auto,nothing unusual and the timer is not due,75.0,167.9,3,4,4,scale_up,"auto: highest demand in the last 10 min is 1680/min, needs 4 replicas"
+27030,unusual,forecast error: 100% over the last 5 minutes,0.0,2.1,4,4,4,hold,fake LLM: demand 1680/min needs 10 replicas
+27036,unusual,forecast error: 1400000000000% over the last 5 minutes,0.0,2.7,4,4,4,hold,fake LLM: demand 1680/min needs 10 replicas
+27039,auto,nothing unusual and the timer is not due,0.0,2.8,4,1,3,scale_down,"auto: highest demand in the last 10 min is 3/min, needs 1 replicas"
+27040,auto,nothing unusual and the timer is not due,0.0,2.8,3,1,2,scale_down,"auto: highest demand in the last 10 min is 3/min, needs 1 replicas"
+27041,auto,nothing unusual and the timer is not due,0.0,2.7,2,1,1,scale_down,"auto: highest demand in the last 10 min is 3/min, needs 1 replicas"
+27042,unusual,forecast error: 185420000000000% over the last 5 minutes,0.0,2.7,1,1,1,hold,fake LLM: demand 3/min needs 1 replicas
+27048,unusual,forecast error: 1360000000000% over the last 5 minutes,0.0,2.8,1,1,1,hold,fake LLM: demand 3/min needs 1 replicas
+27054,unusual,forecast error: 1380000000000% over the last 5 minutes,0.0,2.8,1,1,1,hold,fake LLM: demand 3/min needs 1 replicas
+27060,unusual,forecast error: 1400000000000% over the last 5 minutes,0.0,2.8,1,1,1,hold,fake LLM: demand 3/min needs 1 replicas
+27066,unusual,forecast error: 1400000000000% over the last 5 minutes,0.0,2.9,1,1,1,hold,fake LLM: demand 3/min needs 1 replicas
+27072,unusual,forecast error: 1410000000000% over the last 5 minutes,0.0,2.9,1,1,1,hold,fake LLM: demand 3/min needs 1 replicas
+27078,unusual,forecast error: 1460000000000% over the last 5 minutes,0.0,2.9,1,1,1,hold,fake LLM: demand 3/min needs 1 replicas
+27084,unusual,forecast error: 125% over the last 5 minutes,0.0,2.6,1,1,1,hold,fake LLM: demand 92/min needs 1 replicas
+27090,unusual,forecast error: 1450000000000% over the last 5 minutes,0.0,2.8,1,1,1,hold,fake LLM: demand 92/min needs 1 replicas
+27097,unusual,forecast error: 10360000000000% over the last 5 minutes,0.0,2.9,1,1,1,hold,fake LLM: demand 89/min needs 1 replicas
+27103,unusual,forecast error: 10000000000000% over the last 5 minutes,0.0,2.9,1,1,1,hold,fake LLM: demand 3/min needs 1 replicas
+27109,unusual,forecast error: 1430000000000% over the last 5 minutes,0.0,2.9,1,1,1,hold,fake LLM: demand 3/min needs 1 replicas
+27115,unusual,forecast error: 1450000000000% over the last 5 minutes,0.0,2.9,1,1,1,hold,fake LLM: demand 3/min needs 1 replicas
+27121,unusual,forecast error: 1400000000000% over the last 5 minutes,0.0,2.9,1,1,1,hold,fake LLM: demand 3/min needs 1 replicas
+27127,unusual,forecast error: 1390000000000% over the last 5 minutes,0.0,2.8,1,1,1,hold,fake LLM: demand 3/min needs 1 replicas
+27133,unusual,forecast error: 1430000000000% over the last 5 minutes,0.0,2.9,1,1,1,hold,fake LLM: demand 3/min needs 1 replicas
+27139,unusual,forecast error: 1420000000000% over the last 5 minutes,0.0,2.8,1,1,1,hold,fake LLM: demand 3/min needs 1 replicas
+27145,unusual,forecast error: 1430000000000% over the last 5 minutes,0.0,2.8,1,1,1,hold,fake LLM: demand 3/min needs 1 replicas
+27151,unusual,forecast error: 1410000000000% over the last 5 minutes,0.0,2.8,1,1,1,hold,fake LLM: demand 3/min needs 1 replicas
+27157,unusual,spike: forecast jumped 71% in one minute,158.0,249.4,1,2,2,scale_up,fake LLM: demand 249/min needs 2 replicas
+27158,auto,nothing unusual and the timer is not due,343.0,372.8,2,3,3,scale_up,"auto: highest demand in the last 6 min is 373/min, needs 3 replicas"
+27167,unusual,forecast error: 65% over the last 5 minutes,93.0,110.5,3,3,3,hold,fake LLM: demand 373/min needs 3 replicas
+27168,auto,nothing unusual and the timer is not due,126.0,137.8,3,2,2,scale_down,"auto: highest demand in the last 10 min is 334/min, needs 2 replicas"
+27173,unusual,forecast error: 154% over the last 5 minutes,104.0,112.9,2,1,1,scale_down,fake LLM: demand 142/min needs 1 replicas
+27185,unusual,spike: forecast jumped 59% in one minute,127.0,118.6,1,1,1,hold,fake LLM: demand 127/min needs 1 replicas
+27207,timer,timer: 12 minutes since the last check,70.0,55.8,1,1,1,hold,fake LLM: demand 114/min needs 1 replicas
+27210,unusual,forecast error: 64% over the last 5 minutes,302.0,176.3,1,1,1,hold,fake LLM: demand 343/min needs 1 replicas
+27216,unusual,forecast error: 68% over the last 5 minutes,446.0,225.4,1,1,1,hold,fake LLM: demand 446/min needs 1 replicas
+27228,timer,timer: 12 minutes since the last check,278.0,181.5,1,1,1,hold,fake LLM: demand 391/min needs 1 replicas
+27229,unusual,forecast error: 56% over the last 5 minutes,322.0,199.8,1,1,1,hold,fake LLM: demand 391/min needs 1 replicas
+27241,timer,timer: 12 minutes since the last check,251.0,185.2,1,1,1,hold,fake LLM: demand 251/min needs 1 replicas
+27251,unusual,forecast error: 58% over the last 5 minutes,29.0,26.4,1,1,1,hold,fake LLM: demand 198/min needs 1 replicas
+27257,unusual,forecast error: 80% over the last 5 minutes,546.0,312.0,1,1,1,hold,fake LLM: demand 546/min needs 1 replicas
+27263,unusual,forecast error: 92% over the last 5 minutes,282.0,172.9,1,1,1,hold,fake LLM: demand 546/min needs 1 replicas
+27269,unusual,forecast error: 68% over the last 5 minutes,370.0,153.2,1,1,1,hold,fake LLM: demand 621/min needs 1 replicas
+27275,unusual,forecast error: 67% over the last 5 minutes,364.0,160.6,1,1,1,hold,fake LLM: demand 621/min needs 1 replicas

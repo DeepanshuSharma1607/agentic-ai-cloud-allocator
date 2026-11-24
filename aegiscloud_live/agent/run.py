@@ -117,7 +117,15 @@ def main():
             state["tick"] = tick
             state["force_alert"] = bool(a.test_alert and stats["ticks"] == 0)
             started = time.perf_counter()
-            state = app.invoke(state)                                      # one full pass through the graph = one tick
+            try:
+                state = app.invoke(state)                                  # one full pass through the graph = one tick
+            except Exception as e:                                         # a locked CSV, a bad reply ...: skip THIS tick, keep the agent alive
+                alog.error("tick %s skipped: %s: %s", tick.get("minute"), type(e).__name__, e)
+                print(f"    WARNING: minute {tick.get('minute')} skipped ({type(e).__name__}: {e})")
+                stats["skipped"] += 1
+                last_minute = tick["minute"]
+                tick = feed.next_tick(last_minute)
+                continue
             duration = time.perf_counter() - started
 
             after, mode, alert = state["applied"], state["mode"], state["alert_reason"]

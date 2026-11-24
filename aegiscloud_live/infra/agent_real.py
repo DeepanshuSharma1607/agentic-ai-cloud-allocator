@@ -21,18 +21,24 @@ _last_warn = [0.0]
 
 
 def real_set_replicas(n):
-    try:
-        r = requests.post(f"{C.URL_GATEWAY}/infra/scale", json={"n": int(n), "source": "agent"}, timeout=3)
-        r.raise_for_status()                                      # a 404 / 500 used to look like success
-        answer = r.json()
-        if answer.get("clamped") and time.time() - _last_warn[0] > 30:
-            logging.getLogger("agent").warning("scale to %s was clamped to %s by the device limit", n, answer.get("desired"))
-            _last_warn[0] = time.time()
-    except Exception as e:
-        if time.time() - _last_warn[0] > 30:                      # the agent must never crash because the cluster is slow
-            print(f"WARNING: could not reach the gateway to scale to {n}: {e}")
-            logging.getLogger("agent").warning("could not reach the gateway to scale to %s: %s", n, e)
-            _last_warn[0] = time.time()
+    last_error = None
+    for attempt in range(3):                                      # a stalled gateway used to drop the command silently: retry with a longer timeout
+        try:
+            r = requests.post(f"{C.URL_GATEWAY}/infra/scale", json={"n": int(n), "source": "agent"}, timeout=6)
+            r.raise_for_status()                                  # a 404 / 500 used to look like success
+            answer = r.json()
+            if answer.get("clamped") and time.time() - _last_warn[0] > 30:
+                logging.getLogger("agent").warning("scale to %s was clamped to %s by the device limit", n, answer.get("desired"))
+                _last_warn[0] = time.time()
+            return True
+        except Exception as e:                                    # the agent must never crash because the cluster is slow
+            last_error = e
+            time.sleep(0.5 * (attempt + 1))
+    if time.time() - _last_warn[0] > 30:
+        print(f"WARNING: could not reach the gateway to scale to {n} after 3 tries: {last_error}")
+        logging.getLogger("agent").warning("could not reach the gateway to scale to %s after 3 tries: %s", n, last_error)
+        _last_warn[0] = time.time()
+    return False
 
 
 def _warn_if_capacity_is_stale(rt):

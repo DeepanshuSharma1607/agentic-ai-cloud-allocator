@@ -97,10 +97,20 @@ def file_bytes(path):
     return data
 
 
+_down: dict[str, float] = {}                         # host -> time of its last failed GET (see api)
+DOWN_COOLDOWN_S = 6.0
+
+
 def api(method, url, **kw):
-    """(ok, json-or-error-text). Never raises."""
+    """(ok, json-or-error-text). Never raises. A GET to a host that just failed is skipped for a few seconds, so a stalled
+    backend cannot make every dashboard refresh wait for the full timeout again and again."""
+    import time as _t
+    host = url.split("/", 3)[2] if "://" in url else url
+    if method.upper() == "GET" and _t.time() - _down.get(host, 0.0) < DOWN_COOLDOWN_S:
+        return False, "service not answering (will retry in a few seconds)"
     try:
         r = requests.request(method, url, timeout=kw.pop("timeout", 4), **kw)
+        _down.pop(host, None)
         if r.status_code >= 400:
             try:
                 detail = r.json().get("detail", r.text)
@@ -109,6 +119,8 @@ def api(method, url, **kw):
             return False, str(detail)[:300]
         return True, r.json()
     except Exception as e:
+        if method.upper() == "GET":
+            _down[host] = _t.time()
         return False, f"{type(e).__name__}: {e}"
 
 

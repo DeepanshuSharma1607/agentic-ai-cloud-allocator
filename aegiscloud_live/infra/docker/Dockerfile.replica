@@ -5,6 +5,8 @@ ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
 RUN pip install --no-cache-dir fastapi "uvicorn[standard]" numpy psutil pydantic
 COPY settings.py ./settings.py
 COPY traffic ./traffic
+COPY obs ./obs
+COPY ui ./ui
 COPY infra/__init__.py ./infra/__init__.py
 COPY infra/replica_app.py ./infra/replica_app.py
 EXPOSE 8001

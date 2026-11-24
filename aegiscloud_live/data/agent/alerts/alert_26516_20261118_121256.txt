@@ -1,0 +1,10 @@
+Subject: [URGENT] Autoscaler Alert: High P95 Latency Detected
+Status: sent to deepanshusharma0846@gmail.com
+
+The autoscaler has detected that the real service is slow, with p95 latency above 500 ms for 6 ticks in a row, reaching a p95 of 1293 ms on the last tick at minute 26516.
+
+Key numbers from the report: current traffic is 171 requests/min, forecast is 144 requests/min, and utilisation is 40% with capacity at 425 requests/min per replica. There is currently 1 replica running out of the 1-4 allowed limits. Over the last 6 minutes, traffic ranged from a minimum of 101 to a maximum of 350 requests/min. The last decision made was to hold to 1 replicas because the highest demand in the last 6 minutes was 350/min, which supposedly needed 1 replicas.
+
+The autoscaler has previously taken actions such as scaling up to 2 replicas at minute 26496, holding at minute 26501, scaling down to 1 replica at minute 26506, holding at minute 26513, and most recently holding to 1 replicas.
+
+You should check why the replica count dropped back down to 1 despite the peak traffic spike of 350 requests/min at minute 26513, investigate potential resource bottlenecks causing high latency at low utilisation, and consider manually scaling up or adjusting the autoscaling policy thresholds. Full last-hour logs are attached as CSV files.
